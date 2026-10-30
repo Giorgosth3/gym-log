@@ -34,7 +34,6 @@ let be = null, uid = null, unsub = null;
 let sessions = {}, days = [...DEFAULT_DAYS], lists = clone(BASE), prefs = { ...DEFAULT_PREFS }, body = { entries: {} };
 let day = mem.get("day") || "Push", tab = mem.get("tab") || "training";
 let renaming = null, armed = null, adding = null, dayEditing = null, selSet = null;
-let armTimer = null;
 const expanded = new Set();
 
 /* ---------- units ---------- */
@@ -197,15 +196,22 @@ function renderHistory() {
       head.append(inp, ok, no); card.appendChild(head);
       setTimeout(() => { inp.focus(); inp.select(); }, 0);
     } else {
-      const btns = el("div", "btns"), ren = el("button", "use", "Rename");
-      const rm = el("button", armed === key ? "use danger" : "use", armed === key ? "Tap again" : "Remove");
-      rm.setAttribute("aria-label", armed === key ? "Tap again to remove " + ex : "Remove " + ex);
-      ren.onclick = () => { renaming = key; armed = null; adding = null; renderHistory(); };
-      rm.onclick = () => {
-        if (armed === key) { armed = null; clearTimeout(armTimer); removeExercise(hd, ex); return; }
-        armed = key; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = null; if (tab === "history") renderHistory(); }, 4000); renderHistory();
-      };
-      btns.append(ren, rm); head.append(el("h3", null, ex), btns); card.appendChild(head);
+      const btns = el("div", "btns");
+      if (armed === key) {
+        // second step: confirm or cancel
+        const no = el("button", "use", "Cancel"), yes = el("button", "use danger", "Remove");
+        yes.setAttribute("aria-label", "Confirm: remove " + ex);
+        no.onclick = () => { armed = null; renderHistory(); };
+        yes.onclick = () => { armed = null; removeExercise(hd, ex); };
+        btns.append(no, yes);
+      } else {
+        const ren = el("button", "use", "Rename"), rm = el("button", "use", "Remove");
+        rm.setAttribute("aria-label", "Remove " + ex);
+        ren.onclick = () => { renaming = key; armed = null; adding = null; renderHistory(); };
+        rm.onclick = () => { armed = key; renaming = null; renderHistory(); };
+        btns.append(ren, rm);
+      }
+      head.append(el("h3", null, ex), btns); card.appendChild(head);
       if (armed === key) card.appendChild(el("p", "small warn", nSets ? "This deletes " + ex + " and its " + nSets + " logged set" + (nSets > 1 ? "s" : "") + "." : "This removes " + ex + " from " + hd + "."));
     }
     if (!dates.length) card.appendChild(el("div", "none", "No sets logged yet."));
