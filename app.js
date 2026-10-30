@@ -17,7 +17,7 @@ const mem = { get(k) { try { return localStorage.getItem(k); } catch (e) { retur
 const clone = o => JSON.parse(JSON.stringify(o));
 
 let be = null, uid = null, unsub = null;
-let sessions = {}, lists = clone(BASE), day = mem.get("day") || "Push", histDay = null, renaming = null, removing = null;
+let sessions = {}, lists = clone(BASE), day = mem.get("day") || "Push", histDay = null, renaming = null, removing = null, adding = null;
 const expanded = new Set();
 
 /* ---------- screens ---------- */
@@ -42,7 +42,7 @@ function renderHint() {
   if (!prev.length) { $("hint").textContent = "No earlier sets for this one yet."; return; }
   const last = prev[0].date, sets = prev.filter(s => s.date === last).sort((a, b) => a.t - b.t);
   $("hint").textContent = "Last time (" + fmtDate(last) + "): ";
-  const b = document.createElement("b"); b.textContent = sets.map(s => s.w + " kg × " + s.r).join("  ·  "); $("hint").appendChild(b);
+  const b = document.createElement("b"); b.textContent = sets.map(s => s.w + "kg × " + s.r).join("  ·  "); $("hint").appendChild(b);
 }
 function renderHistory() {
   const hd = histDay || day;
@@ -51,7 +51,7 @@ function renderHistory() {
   const all = allSets(), cur = $("date").value;
   const names = exercisesFor(hd);
   all.forEach(s => { if (s.day === hd && !names.includes(s.ex)) names.push(s.ex); });
-  if (!names.length) { box.innerHTML = '<div class="empty">No exercises for this day yet. Add one at the bottom of the page.</div>'; return; }
+  if (!names.length) { const e = document.createElement("div"); e.className = "empty"; e.textContent = "No exercises for " + hd + " yet. Add your first one below."; box.appendChild(e); }
   names.forEach(ex => {
     const byDate = {}; all.filter(s => s.ex === ex).forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
     const dates = Object.keys(byDate).sort().reverse();
@@ -101,7 +101,7 @@ function renderHistory() {
       const dl = document.createElement("span"); dl.className = "d"; dl.textContent = fmtDate(d);
       const chips = document.createElement("div"); chips.className = "chips";
       byDate[d].sort((a, b) => a.t - b.t).forEach(s => {
-        const c = document.createElement("span"); c.className = "chip"; c.textContent = s.w + "×" + s.r;
+        const c = document.createElement("span"); c.className = "chip"; c.textContent = s.w + "kg × " + s.r;
         if (s.note) { const sm = document.createElement("small"); sm.textContent = s.note; c.appendChild(sm); }
         chips.appendChild(c);
       });
@@ -121,8 +121,38 @@ function renderHistory() {
     }
     box.appendChild(card);
   });
+  box.appendChild(addCard(hd));
 }
-function renderAll() { renderDays(); renderSelect(); if (!renaming) renderHistory(); }
+// Last box in History: add a new exercise to the day being viewed.
+function addCard(hd) {
+  const card = document.createElement("div"); card.className = "ex-card add-card";
+  if (adding === hd) {
+    const head = document.createElement("div"); head.className = "ex-head renaming";
+    const inp = document.createElement("input"); inp.type = "text"; inp.id = "newEx"; inp.placeholder = "New " + hd + " exercise"; inp.setAttribute("aria-label", "New " + hd + " exercise name");
+    const ok = document.createElement("button"); ok.className = "use primary"; ok.textContent = "Add";
+    const no = document.createElement("button"); no.className = "use"; no.textContent = "Cancel";
+    ok.onclick = () => addExercise(hd, inp.value);
+    no.onclick = () => { adding = null; renderHistory(); };
+    inp.onkeydown = e => { if (e.key === "Enter") ok.click(); if (e.key === "Escape") no.click(); };
+    head.append(inp, ok, no); card.appendChild(head);
+    setTimeout(() => inp.focus(), 0);
+  } else {
+    const b = document.createElement("button"); b.className = "add-btn"; b.textContent = "+ Add an exercise to " + hd;
+    b.onclick = () => { adding = hd; renaming = null; renderHistory(); };
+    card.appendChild(b);
+  }
+  return card;
+}
+function addExercise(d, name) {
+  const n = name.trim(); if (!n) return;
+  if (exercisesFor(d).includes(n)) { toast("That's already on the " + d + " list.", true); return; }
+  lists = { ...lists, [d]: [...(lists[d] || []), n] };
+  adding = null;
+  if (d === day) mem.set("ex_" + day, n);
+  renderSelect(); renderHistory();
+  saveLists(); toast("Added " + n + " to " + d + "." + offlineNote());
+}
+function renderAll() { renderDays(); renderSelect(); if (!renaming && !adding) renderHistory(); }
 
 function pickExercise(d, ex, last) {
   day = d; mem.set("day", day); histDay = null; renderDays(); renderSelect();
@@ -156,7 +186,7 @@ function saveSet() {
   const next = { date, sets: [...(s.sets || []), { day, ex, w, r, note: $("note").value.trim(), t: Date.now() }] };
   sessions[date] = next; renderHistory(); renderHint();
   writeSession(date, next);
-  toast("Saved: " + ex + " set " + next.sets.filter(x => x.ex === ex).length + " — " + w + " kg × " + r + offlineNote());
+  toast("Saved: " + ex + " set " + next.sets.filter(x => x.ex === ex).length + " — " + w + "kg × " + r + offlineNote());
   $("note").value = "";
 }
 function removeSet(date, i) {
@@ -286,7 +316,7 @@ function applyDocs(docs) {
     } else if (v.date) next[v.date] = v;
   });
   sessions = next;
-  if (!renaming) renderAll(); else renderHint();
+  if (!renaming && !adding) renderAll(); else renderHint();
   const n = Object.keys(next).length;
   $("status").textContent = n + " session" + (n === 1 ? "" : "s") + " saved · private to you";
 }
@@ -294,8 +324,8 @@ function applyDocs(docs) {
 /* ---------- wiring ---------- */
 function wire() {
   $("date").value = todayISO();
-  document.querySelectorAll("[data-day]").forEach(b => b.onclick = () => { day = b.dataset.day; mem.set("day", day); histDay = null; renderAll(); });
-  document.querySelectorAll("[data-hday]").forEach(b => b.onclick = () => { histDay = b.dataset.hday; renderHistory(); });
+  document.querySelectorAll("[data-day]").forEach(b => b.onclick = () => { day = b.dataset.day; mem.set("day", day); histDay = null; adding = null; renderAll(); });
+  document.querySelectorAll("[data-hday]").forEach(b => b.onclick = () => { histDay = b.dataset.hday; adding = null; renderHistory(); });
   $("ex").onchange = () => { mem.set("ex_" + day, $("ex").value); renderHint(); };
   $("date").onchange = () => { renderHistory(); renderHint(); };
   document.querySelectorAll("[data-step]").forEach(b => b.onclick = () => {
@@ -303,13 +333,6 @@ function wire() {
     el.value = Math.max(0, Math.round((v + d) * 10) / 10);
   });
   $("save").onclick = saveSet;
-  $("addEx").onclick = () => {
-    const n = $("newEx").value.trim(); if (!n) return;
-    if (exercisesFor(day).includes(n)) { toast("That's already on the " + day + " list.", true); return; }
-    lists = { ...lists, [day]: [...(lists[day] || []), n] };
-    $("newEx").value = ""; mem.set("ex_" + day, n); renderAll();
-    saveLists(); toast("Added " + n + " to " + day + "." + offlineNote());
-  };
   $("export").onclick = exportExcel;
   $("importFile").onchange = e => { const f = e.target.files[0]; if (f) importExcel(f); e.target.value = ""; };
   $("signin").onclick = async () => {

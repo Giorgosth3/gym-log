@@ -121,6 +121,8 @@ h2{font-family:var(--display);font-weight:700;font-size:1.3rem;text-transform:up
 .more{font:600 .8rem var(--body);background:transparent;border:0;color:var(--accent);cursor:pointer;padding:2px 0;align-self:flex-start}
 .empty{color:var(--muted);font-size:.95rem;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center}
 .foot{display:flex;flex-direction:column;gap:10px}
+.add-card{border-style:dashed;background:transparent}
+.add-btn{background:transparent;border:0;color:var(--ink);font:600 1.02rem var(--body);text-align:left;padding:6px 0;cursor:pointer;width:100%}
 /* side menu */
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;flex-shrink:0;border-radius:10px;
   border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:1.1rem;cursor:pointer;padding:0}
@@ -244,12 +246,6 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
           <button data-theme-pick="dark">Dark</button><button data-theme-pick="ael">AEL Blue</button>
           <button data-theme-pick="ael-yellow">AEL Yellow</button><button data-theme-pick="ael-soft">AEL Soft</button>
         </div>
-      </section>
-
-      <section class="drawer-sec">
-        <label class="lbl" for="newEx">Add an exercise</label>
-        <p class="small">Adds it to the day you have selected at the top.</p>
-        <div class="addrow"><input type="text" id="newEx" placeholder="Exercise name"><button class="ghost" id="addEx">Add</button></div>
       </section>
 
       <section class="drawer-sec">
