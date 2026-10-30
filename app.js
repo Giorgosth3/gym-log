@@ -1101,6 +1101,14 @@ function showInApp(blocked, appName) {
     ? ["Tap the <b>⋯</b> or <b>⋮</b> menu at the top of the screen.", "Choose <b>Open in external browser</b> (or <b>Open in " + browser + "</b>).", "Tap <b>Sign in with Google</b> there."]
     : ["Copy the link below.", "Open <b>" + browser + "</b> and paste it into the address bar.", "Tap <b>Sign in with Google</b> there."];
   $("inappSteps").innerHTML = steps.map(x => "<li>" + x + "</li>").join("");
+  // one-tap jump to the real browser: Chrome via an Android intent, Safari via x-safari-https (iOS 17+)
+  const url = location.href.split("#")[0].split("?")[0], btn = $("openReal");
+  if (appName) {
+    const rest = url.replace(/^https?:\/\//, "");
+    btn.href = ios ? "x-safari-" + url.replace(/^http:/, "https:")
+      : "intent://" + rest + "#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=" + encodeURIComponent(url) + ";end";
+    btn.textContent = "Open in " + browser; btn.hidden = false; $("orLbl").hidden = false;
+  } else { btn.hidden = true; $("orLbl").hidden = true; }
   $("inappUrl").textContent = location.href.split("#")[0].split("?")[0];
 }
 

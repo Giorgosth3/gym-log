@@ -378,6 +378,7 @@ body.menu-open{overflow:hidden}
 .inapp p,.inapp ol{margin:0;color:var(--muted);font-size:.92rem}
 .inapp ol{padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .inapp ol b{color:var(--ink)}
+.openreal{display:block;text-align:center;text-decoration:none;font-size:1.1rem;padding:13px}
 .inapplink{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inapplink code{font:500 .85rem var(--num);background:var(--chip);padding:6px 8px;border-radius:8px;overflow-wrap:anywhere;flex:1;min-width:0}
 </style>
@@ -396,6 +397,8 @@ body.menu-open{overflow:hidden}
   <div class="inapp" id="inapp" hidden>
     <b>Open this page in your browser to sign in</b>
     <p id="inappHow">You're viewing this inside another app, which blocks Google sign-in.</p>
+    <a class="save openreal" id="openReal" href="#" hidden>Open in Safari</a>
+    <span class="small" id="orLbl" hidden>If that button doesn't work:</span>
     <ol id="inappSteps"></ol>
     <div class="inapplink"><code id="inappUrl"></code><button class="use primary" id="copyLink">Copy link</button></div>
   </div>
