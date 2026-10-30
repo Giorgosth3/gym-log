@@ -372,6 +372,14 @@ body.menu-open{overflow:hidden}
 .cbtn{margin-top:4px;font:600 1rem var(--body);padding:11px 28px;border-radius:999px;border:0;background:var(--c);color:#111;cursor:pointer}
 @media (prefers-reduced-motion: no-preference){.celecard{animation:celePop .35s cubic-bezier(.2,1.4,.4,1)}}
 @keyframes celePop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
+
+/* sign-in help for in-app browsers */
+.inapp{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:12px;border:1px solid var(--accent);background:var(--surface);max-width:420px}
+.inapp p,.inapp ol{margin:0;color:var(--muted);font-size:.92rem}
+.inapp ol{padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.inapp ol b{color:var(--ink)}
+.inapplink{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.inapplink code{font:500 .85rem var(--num);background:var(--chip);padding:6px 8px;border-radius:8px;overflow-wrap:anywhere;flex:1;min-width:0}
 </style>
 </head>
 <body>
@@ -385,6 +393,12 @@ body.menu-open{overflow:hidden}
     Sign in with Google
   </button>
   <div class="toast err" id="gateMsg" role="status"></div>
+  <div class="inapp" id="inapp" hidden>
+    <b>Open this page in your browser to sign in</b>
+    <p id="inappHow">You're viewing this inside another app, which blocks Google sign-in.</p>
+    <ol id="inappSteps"></ol>
+    <div class="inapplink"><code id="inappUrl"></code><button class="use primary" id="copyLink">Copy link</button></div>
+  </div>
 </div>
 
 <div class="wrap" id="loading"><div class="empty">Loading…</div></div>

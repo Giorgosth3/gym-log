@@ -15,19 +15,19 @@ export async function firebaseBackend(config) {
   } catch (e) { db = F.getFirestore(app); }
   const provider = new A.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  A.getRedirectResult(auth).catch(() => {});
   const col = uid => F.collection(db, "users", uid, "log");
   return {
     onUser(cb) {
       return A.onAuthStateChanged(auth, u => cb(u ? { uid: u.uid, name: u.displayName || "", email: u.email || "" } : null));
     },
+    // Pop-up sign-in only. The redirect method breaks on iPhones and in-app browsers when the
+    // app and its sign-in domain differ (GitHub Pages vs firebaseapp.com), so we don't fall back to it.
     async signIn() {
       try { await A.signInWithPopup(auth, provider); }
       catch (e) {
         const c = e && e.code || "";
-        if (c === "auth/popup-blocked" || c === "auth/operation-not-supported-in-this-environment") {
-          await A.signInWithRedirect(auth, provider);
-        } else if (c !== "auth/popup-closed-by-user" && c !== "auth/cancelled-popup-request") throw e;
+        if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") return;
+        throw e;
       }
     },
     signOut() { return A.signOut(auth); },

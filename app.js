@@ -1041,7 +1041,21 @@ function wire() {
   $("importFile").onchange = e => { const f = e.target.files[0]; if (f) importExcel(f); e.target.value = ""; };
   $("signin").onclick = async () => {
     $("gateMsg").textContent = "";
-    try { await be.signIn(); } catch (e) { $("gateMsg").textContent = "Sign-in didn't work: " + (e && (e.code || e.message) || "try again"); }
+    try { await be.signIn(); }
+    catch (e) {
+      const c = e && e.code || "";
+      if (c === "auth/popup-blocked" || c === "auth/operation-not-supported-in-this-environment" || c === "auth/web-storage-unsupported") { showInApp(true); $("gateMsg").textContent = "This browser blocked the Google sign-in window."; }
+      else if (c === "auth/network-request-failed") $("gateMsg").textContent = "No connection. Check your internet and try again.";
+      else $("gateMsg").textContent = "Sign-in didn't work (" + (c || "unknown error") + "). Try again, or open the page in Safari or Chrome.";
+    }
+  };
+  // In-app browsers (Instagram, Facebook, TikTok…) block Google sign-in: explain how to open the real browser.
+  const appName = inAppBrowser();
+  if (appName) showInApp(false, appName);
+  $("copyLink").onclick = async () => {
+    const url = location.href.split("#")[0].split("?")[0];
+    try { await navigator.clipboard.writeText(url); $("copyLink").textContent = "Copied!"; }
+    catch (e) { const r = document.createRange(); r.selectNodeContents($("inappUrl")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); $("copyLink").textContent = "Select and copy"; }
   };
   // side menu
   const openMenu = () => {
@@ -1065,6 +1079,29 @@ function wire() {
   ["thBg", "thSurface", "thInk", "thAccent"].forEach(id => $(id).addEventListener("input", previewThemeEdit));
   paintTheme(); renderThemes();
   if (Number(mem.get("restEnd") || 0) > Date.now()) runRest();
+}
+
+function inAppBrowser() {
+  const ua = navigator.userAgent || "";
+  if (/Instagram/i.test(ua)) return "Instagram";
+  if (/FBAN|FBAV|FB_IAB|FBIOS/i.test(ua)) return "Facebook";
+  if (/Messenger/i.test(ua)) return "Messenger";
+  if (/musical_ly|Bytedance|TikTok/i.test(ua)) return "TikTok";
+  if (/Snapchat/i.test(ua)) return "Snapchat";
+  if (/LinkedInApp/i.test(ua)) return "LinkedIn";
+  if (/\bLine\//i.test(ua)) return "LINE";
+  if (/Twitter/i.test(ua)) return "X";
+  return null;
+}
+function showInApp(blocked, appName) {
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent), browser = ios ? "Safari" : "Chrome";
+  $("inapp").hidden = false;
+  $("inappHow").textContent = appName ? "You opened this inside " + appName + ", which blocks Google sign-in." : "This browser blocked the Google sign-in window.";
+  const steps = appName
+    ? ["Tap the <b>⋯</b> or <b>⋮</b> menu at the top of the screen.", "Choose <b>Open in external browser</b> (or <b>Open in " + browser + "</b>).", "Tap <b>Sign in with Google</b> there."]
+    : ["Copy the link below.", "Open <b>" + browser + "</b> and paste it into the address bar.", "Tap <b>Sign in with Google</b> there."];
+  $("inappSteps").innerHTML = steps.map(x => "<li>" + x + "</li>").join("");
+  $("inappUrl").textContent = location.href.split("#")[0].split("?")[0];
 }
 
 async function start() {
