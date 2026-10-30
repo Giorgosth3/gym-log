@@ -317,6 +317,15 @@ function wire() {
     try { await be.signIn(); } catch (e) { $("gateMsg").textContent = "Sign-in didn't work: " + (e && (e.code || e.message) || "try again"); }
   };
   $("signout").onclick = () => be.signOut();
+  const paintTheme = () => {
+    const t = mem.get("theme") || "auto";
+    if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
+    document.querySelectorAll("[data-theme-pick]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themePick === t));
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m => { if (t === "auto") m.content = m.media.includes("dark") ? "#121518" : "#f7f5f2"; else m.content = bg; });
+  };
+  document.querySelectorAll("[data-theme-pick]").forEach(b => b.onclick = () => { mem.set("theme", b.dataset.themePick); paintTheme(); });
+  paintTheme();
 }
 
 async function start() {
