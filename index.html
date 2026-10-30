@@ -5,21 +5,22 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Gym Log</title>
 <meta name="description" content="Log your gym sets and see what you lifted last time.">
-<meta name="theme-color" content="#121518">
+<meta name="theme-color" content="#f7f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121518" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=Rubik:wght@500;600;700&display=swap">
 <style>
 /* Layout: one narrow column — entry card, history by day, account + tools at the foot */
 :root{
-  --bg:#eef0f2; --surface:#ffffff; --ink:#15191e; --muted:#5d6874; --line:#d5dade;
-  --accent:#d94f1e; --accent-ink:#ffffff; --ok:#1f8a4c; --chip:#e2e6ea; --danger:#c62828;
+  --bg:#f7f5f2; --surface:#ffffff; --ink:#1f1c19; --muted:#6b655d; --line:#e5e0d9;
+  --accent:#d94f1e; --accent-ink:#ffffff; --ok:#1f8a4c; --chip:#efebe5; --danger:#c62828;
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:"Barlow",Arial,sans-serif;
-  --num:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --num:"Rubik","Barlow",Arial,sans-serif;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root{
@@ -34,6 +35,15 @@ body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16p
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
   display:flex;flex-direction:column;gap:18px}
 header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+/* top bar: stays put while scrolling so the day buttons are always in reach */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;flex-direction:column;gap:12px;
+  background:var(--bg);margin-top:-16px;margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)));
+  padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));
+  border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand img{width:32px;height:32px;border-radius:8px;flex-shrink:0;border:1px solid var(--line)}
+.topbar h1{font-size:1.7rem}
 h1{font-family:var(--display);font-weight:700;font-size:2rem;letter-spacing:.02em;margin:0;text-transform:uppercase}
 .days{display:flex;gap:8px;flex-wrap:wrap}
 .days button{flex:1 1 0;min-width:70px;font:600 .95rem var(--body);padding:10px 6px;border-radius:999px;
@@ -75,7 +85,7 @@ h2{font-family:var(--display);font-weight:700;font-size:1.3rem;text-transform:up
 .sess .d{font:500 .8rem var(--num);color:var(--muted);padding-top:3px}
 .sess.latest .d{color:var(--accent);font-weight:700}
 .chips{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
-.chip{font:700 .85rem var(--num);padding:3px 7px;border-radius:6px;background:var(--chip);font-variant-numeric:tabular-nums}
+.chip{font:600 .85rem var(--num);padding:3px 7px;border-radius:6px;background:var(--chip);font-variant-numeric:tabular-nums}
 .chip small{font:400 .7rem var(--body);color:var(--muted);margin-left:4px}
 .sess button{background:transparent;border:0;color:var(--muted);font-size:.8rem;cursor:pointer;padding:2px 4px}
 .none{font-size:.85rem;color:var(--muted)}
@@ -119,14 +129,15 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 <div class="wrap" id="loading"><div class="empty">Loading…</div></div>
 
 <div class="wrap" id="main" hidden>
-  <header>
-    <h1>Gym Log</h1>
-    <input type="date" id="date" aria-label="Session date">
-  </header>
-
-  <div class="days" role="group" aria-label="Workout day">
-    <button data-day="Push">Push</button><button data-day="Pull">Pull</button>
-    <button data-day="Legs">Legs</button><button data-day="Shoulders">Shoulders</button>
+  <div class="topbar">
+    <header>
+      <div class="brand"><img src="icons/icon-192.png" alt=""><h1>Gym Log</h1></div>
+      <input type="date" id="date" aria-label="Session date">
+    </header>
+    <div class="days" role="group" aria-label="Workout day">
+      <button data-day="Push">Push</button><button data-day="Pull">Pull</button>
+      <button data-day="Legs">Legs</button><button data-day="Shoulders">Shoulders</button>
+    </div>
   </div>
 
   <section class="card" aria-label="Log a set">

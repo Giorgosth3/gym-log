@@ -42,7 +42,7 @@ function renderHint() {
   if (!prev.length) { $("hint").textContent = "No earlier sets for this one yet."; return; }
   const last = prev[0].date, sets = prev.filter(s => s.date === last).sort((a, b) => a.t - b.t);
   $("hint").textContent = "Last time (" + fmtDate(last) + "): ";
-  const b = document.createElement("b"); b.textContent = sets.map(s => s.w + "×" + s.r).join("  "); $("hint").appendChild(b);
+  const b = document.createElement("b"); b.textContent = sets.map(s => s.w + " kg × " + s.r).join("  ·  "); $("hint").appendChild(b);
 }
 function renderHistory() {
   const hd = histDay || day;
