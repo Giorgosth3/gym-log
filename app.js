@@ -33,7 +33,8 @@ const fmtSec = s => Math.floor(s / 60) + ":" + pad(Math.max(0, Math.round(s % 60
 let be = null, uid = null, unsub = null;
 let sessions = {}, days = [...DEFAULT_DAYS], lists = clone(BASE), prefs = { ...DEFAULT_PREFS }, body = { entries: {} };
 let day = mem.get("day") || "Push", tab = mem.get("tab") || "training";
-let renaming = null, removing = null, adding = null, dayEditing = null;
+let renaming = null, armed = null, adding = null, dayEditing = null, selSet = null;
+let armTimer = null;
 const expanded = new Set();
 
 /* ---------- units ---------- */
@@ -61,13 +62,13 @@ function renderTabs() {
   document.querySelectorAll("[data-tab]").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   $("dayBtns").hidden = !(tab === "training" || tab === "history");
 }
-function setTab(t) { tab = t; mem.set("tab", t); adding = null; renaming = null; renderTabs(); renderPane(); window.scrollTo(0, 0); }
+function setTab(t) { tab = t; mem.set("tab", t); adding = null; renaming = null; armed = null; selSet = null; renderTabs(); renderPane(); window.scrollTo(0, 0); }
 function renderDayBtns() {
   if (!days.includes(day)) day = days[0] || "";
   const box = $("dayBtns"); box.innerHTML = "";
   days.forEach(d => {
     const b = el("button", null, d); b.setAttribute("aria-pressed", d === day);
-    b.onclick = () => { day = d; mem.set("day", d); adding = null; renaming = null; renderDayBtns(); renderSelect(); renderPane(); };
+    b.onclick = () => { day = d; mem.set("day", d); adding = null; renaming = null; armed = null; selSet = null; renderDayBtns(); renderSelect(); renderPane(); };
     box.appendChild(b);
   });
 }
@@ -87,12 +88,30 @@ function renderSelect() {
   if (keep && namesFor(day).includes(keep)) sel.value = keep;
   renderHint(); renderToday();
 }
-function chipsInto(box, sets) {
+// sets: chips; when `rerender` is given, chips are tappable and tapping one offers "Remove set"
+function chipsInto(box, sets, rerender) {
   sets.forEach(s => {
-    const c = el("span", "chip", fmtW(s.w) + " × " + s.r);
+    const label = fmtW(s.w) + " × " + s.r;
+    const c = el(rerender ? "button" : "span", "chip", label);
     if (s.note) c.appendChild(el("small", null, s.note));
+    if (rerender) {
+      const key = s.date + "|" + s.t, on = selSet === key;
+      c.type = "button"; c.classList.add("tap"); if (on) c.classList.add("sel");
+      c.setAttribute("aria-pressed", on); c.setAttribute("aria-label", label + (s.note ? ", " + s.note : "") + ", " + longDate(s.date) + ". Tap for options");
+      c.onclick = () => { selSet = on ? null : key; rerender(); };
+    }
     box.appendChild(c);
   });
+}
+// The bar shown under a tapped set: second tap removes it.
+function setBar(sets, rerender) {
+  const s = sets.find(x => selSet === x.date + "|" + x.t); if (!s) return null;
+  const bar = el("div", "setbar"), yes = el("button", "use danger", "Remove set"), no = el("button", "use", "Cancel");
+  bar.appendChild(el("span", null, fmtW(s.w) + " × " + s.r + " · " + shortDate(s.date)));
+  yes.onclick = () => { selSet = null; removeSetByT(s.date, s.t); };
+  no.onclick = () => { selSet = null; rerender(); };
+  const b = el("div", "btns"); b.append(yes, no); bar.appendChild(b);
+  return bar;
 }
 function renderHint() {
   const ex = $("ex").value, cur = $("date").value, h = $("hint"); h.innerHTML = "";
@@ -108,12 +127,13 @@ function renderToday() {
   const sets = ((sessions[cur] || {}).sets || []).filter(s => s.ex === ex).sort((a, b) => a.t - b.t);
   $("todayBox").hidden = !sets.length;
   $("todayBox").querySelector(".lbl").textContent = cur === todayISO() ? "Today so far" : "Sets on " + longDate(cur);
-  const box = $("todayChips"); box.innerHTML = ""; chipsInto(box, sets);
+  const box = $("todayChips"); box.innerHTML = ""; chipsInto(box, sets.map(s => ({ ...s, date: cur })), renderToday);
+  const bar = setBar(sets.map(s => ({ ...s, date: cur })), renderToday); if (bar) box.appendChild(bar);
 }
 function renderUnits() {
   $("wLbl").textContent = "Weight (" + U() + ")";
   $("bwLbl").textContent = "Weigh-in · " + longDate($("date").value) + " (" + U() + ")";
-  $("goalLbl").textContent = "Goal body weight (" + U() + ")";
+  $("goalLbl").textContent = "Goal weight (" + U() + ")";
   document.querySelectorAll("[data-unit]").forEach(b => b.setAttribute("aria-pressed", b.dataset.unit === U()));
 }
 
@@ -161,46 +181,39 @@ function renderHistory() {
   const hd = day, box = $("history"); box.innerHTML = "";
   const all = allSets(), cur = $("date").value, names = namesFor(hd);
   if (!names.length) box.appendChild(el("div", "empty", "No exercises for " + hd + " yet. Add your first one below."));
+  else if (all.some(s => s.day === hd)) box.appendChild(el("p", "small tip", "Tap any set to remove it."));
   names.forEach(ex => {
     const byDate = {}; all.filter(s => s.ex === ex && s.day === hd).forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
     const dates = Object.keys(byDate).sort().reverse();
     const card = el("div", "ex-card"), head = el("div", "ex-head");
-    if (renaming === hd + "|" + ex) {
+    const nSets = all.filter(s => s.ex === ex && s.day === hd).length, key = hd + "|" + ex;
+    if (renaming === key) {
       head.className = "ex-head renaming";
       const inp = el("input"); inp.type = "text"; inp.id = "rename-input"; inp.value = ex; inp.setAttribute("aria-label", "New name for " + ex);
       const ok = el("button", "use primary", "Save"), no = el("button", "use", "Cancel");
       ok.onclick = () => renameExercise(hd, ex, inp.value);
-      no.onclick = () => { renaming = null; removing = null; renderHistory(); };
+      no.onclick = () => { renaming = null; renderHistory(); };
       inp.onkeydown = e => { if (e.key === "Enter") ok.click(); if (e.key === "Escape") no.click(); };
       head.append(inp, ok, no); card.appendChild(head);
-      const nSets = all.filter(s => s.ex === ex && s.day === hd).length, zone = el("div", "remove-zone");
-      if (removing === hd + "|" + ex) {
-        zone.appendChild(el("p", "small", nSets ? "Remove " + ex + " and its " + nSets + " logged set" + (nSets > 1 ? "s" : "") + "? This can't be undone." : "Remove " + ex + " from your " + hd + " list?"));
-        const yes = el("button", "use danger", nSets ? "Remove exercise and sets" : "Remove exercise"), keep = el("button", "use", "Keep it");
-        yes.onclick = () => removeExercise(hd, ex); keep.onclick = () => { removing = null; renderHistory(); };
-        const row = el("div", "btns"); row.append(yes, keep); zone.appendChild(row);
-      } else {
-        const link = el("button", "more danger-link", "Remove exercise…");
-        link.onclick = () => { removing = hd + "|" + ex; renderHistory(); };
-        zone.appendChild(link); setTimeout(() => { inp.focus(); inp.select(); }, 0);
-      }
-      card.appendChild(zone);
+      setTimeout(() => { inp.focus(); inp.select(); }, 0);
     } else {
-      const btns = el("div", "btns"), ren = el("button", "use", "Rename"), use = el("button", "use", "Log this");
-      ren.onclick = () => { renaming = hd + "|" + ex; removing = null; adding = null; renderHistory(); };
-      use.onclick = () => pickExercise(hd, ex, dates.length ? byDate[dates[0]].sort((a, b) => a.t - b.t).slice(-1)[0] : null);
-      btns.append(ren, use); head.append(el("h3", null, ex), btns); card.appendChild(head);
+      const btns = el("div", "btns"), ren = el("button", "use", "Rename");
+      const rm = el("button", armed === key ? "use danger" : "use", armed === key ? "Tap again" : "Remove");
+      rm.setAttribute("aria-label", armed === key ? "Tap again to remove " + ex : "Remove " + ex);
+      ren.onclick = () => { renaming = key; armed = null; adding = null; renderHistory(); };
+      rm.onclick = () => {
+        if (armed === key) { armed = null; clearTimeout(armTimer); removeExercise(hd, ex); return; }
+        armed = key; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = null; if (tab === "history") renderHistory(); }, 4000); renderHistory();
+      };
+      btns.append(ren, rm); head.append(el("h3", null, ex), btns); card.appendChild(head);
+      if (armed === key) card.appendChild(el("p", "small warn", nSets ? "This deletes " + ex + " and its " + nSets + " logged set" + (nSets > 1 ? "s" : "") + "." : "This removes " + ex + " from " + hd + "."));
     }
     if (!dates.length) card.appendChild(el("div", "none", "No sets logged yet."));
     (expanded.has(ex) ? dates : dates.slice(0, 3)).forEach((d, idx) => {
-      const row = el("div", "sess" + (idx === 0 ? " latest" : "")), chips = el("div", "chips"), del = el("span");
-      chipsInto(chips, byDate[d].sort((a, b) => a.t - b.t));
-      if (d === cur) {
-        const b = el("button", null, "Undo last"); b.setAttribute("aria-label", "Delete the last set of " + ex + " for this session");
-        b.onclick = () => { const list = sessions[d].sets || []; let i = -1, tt = -1; list.forEach((s, k) => { if (s.ex === ex && s.day === hd && s.t > tt) { tt = s.t; i = k; } }); if (i >= 0) removeSet(d, i); };
-        del.appendChild(b);
-      }
-      row.append(el("span", "d", fmtDate(d)), chips, del); card.appendChild(row);
+      const row = el("div", "sess" + (idx === 0 ? " latest" : "")), chips = el("div", "chips"), list = byDate[d].sort((a, b) => a.t - b.t);
+      chipsInto(chips, list, renderHistory);
+      row.append(el("span", "d", fmtDate(d)), chips); card.appendChild(row);
+      const bar = setBar(list, renderHistory); if (bar) card.appendChild(bar);
     });
     if (dates.length > 3) {
       const m = el("button", "more", expanded.has(ex) ? "Show fewer" : "Show all " + dates.length + " sessions");
@@ -314,6 +327,8 @@ function renderBody() {
     $("bw").value = trim(disp(base));
   }
   $("bwSave").textContent = ents[cur] != null ? "Update" : "Save";
+  if (document.activeElement !== $("goalIn")) $("goalIn").value = prefs.goal != null ? trim(disp(prefs.goal)) : "";
+  $("goalClear").hidden = prefs.goal == null;
   const box = $("bodyBody"); box.innerHTML = "";
   if (!ds.length) { box.appendChild(el("div", "empty", "Save your first weigh-in above to start your chart.")); return; }
   const first = ents[ds[0]], last = ents[ds[ds.length - 1]], goal = prefs.goal;
@@ -322,7 +337,7 @@ function renderBody() {
   const stats = el("div", "stats");
   stats.append(stat(fmtW(last), "now"),
     stat((change > 0 ? "+" : "") + trim(change) + U(), "since start", toward ? "good" : ""),
-    goal != null ? stat(trim(Math.abs(disp(last) - disp(goal))) + U(), Math.abs(last - goal) < 0.05 ? "goal reached!" : "to goal") : stat("—", "set a goal in ☰"));
+    goal != null ? stat(trim(Math.abs(disp(last) - disp(goal))) + U(), Math.abs(last - goal) < 0.05 ? "goal reached!" : "to goal") : stat("—", "no goal set"));
   box.appendChild(stats);
   const chart = el("div", "card chart"); chart.style.gap = "6px";
   chart.append(el("span", "lbl", "Body weight (" + U() + ")"), lineChart(ds.map(d => ({ label: shortDate(d), v: disp(ents[d]) })), { goal: goal != null ? disp(goal) : null, label: "Body weight over time" }));
@@ -349,7 +364,6 @@ function saveWeighIn() {
 function renderSettings() {
   $("restOn").checked = !!prefs.restOn;
   $("restSecLbl").textContent = fmtSec(prefs.restSec);
-  if (document.activeElement !== $("goalIn")) $("goalIn").value = prefs.goal != null ? trim(disp(prefs.goal)) : "";
   // workout days
   const dl = $("dayList"); dl.innerHTML = "";
   days.forEach((d, i) => {
@@ -426,9 +440,9 @@ function saveLists() {
 function savePrefs() { const p = be.set(uid, "prefs", prefs); p.catch(() => toast("Couldn't save your settings.", true)); return p; }
 function saveBody() { const p = be.set(uid, "body", body); p.catch(() => toast("Couldn't save your weigh-in.", true)); return p; }
 
-function removeSet(date, i) {
+function removeSetByT(date, t) {
   const s = sessions[date]; if (!s) return;
-  const next = { date, sets: s.sets.filter((_, k) => k !== i) };
+  const next = { date, sets: s.sets.filter(x => x.t !== t) };
   if (next.sets.length) sessions[date] = next; else delete sessions[date];
   renderPane(); writeSession(date, next); toast("Set deleted." + offlineNote());
 }
@@ -450,7 +464,7 @@ function removeExercise(d, ex) {
     }
   });
   if (mem.get("ex_" + d) === ex) mem.set("ex_" + d, "");
-  expanded.delete(ex); renaming = null; removing = null;
+  expanded.delete(ex); renaming = null; armed = null;
   renderSelect(); renderHistory(); renderSettings(); saveLists(); changed.forEach(s => writeSession(s.date, s));
   toast("Removed " + ex + "." + offlineNote());
 }
@@ -629,10 +643,11 @@ function wire() {
   $("goalSave").onclick = () => {
     const v = parseFloat(String($("goalIn").value).replace(",", "."));
     if (!(v > 0)) { toast("Enter a goal weight, e.g. 78.", true); return; }
-    prefs = { ...prefs, goal: toKg(v) }; savePrefs(); $("goalIn").blur(); renderSettings(); if (tab === "body") renderBody();
+    prefs = { ...prefs, goal: toKg(v) }; savePrefs(); $("goalIn").blur(); renderBody();
     toast("Goal set to " + trim(v) + U() + ".");
   };
-  $("goalClear").onclick = () => { prefs = { ...prefs, goal: null }; savePrefs(); renderSettings(); if (tab === "body") renderBody(); toast("Goal cleared."); };
+  $("goalClear").onclick = () => { prefs = { ...prefs, goal: null }; savePrefs(); renderBody(); toast("Goal cleared."); };
+  $("goalIn").onkeydown = e => { if (e.key === "Enter") $("goalSave").click(); };
   $("addDay").onclick = addDay;
   $("newDay").onkeydown = e => { if (e.key === "Enter") addDay(); };
   $("export").onclick = exportExcel;

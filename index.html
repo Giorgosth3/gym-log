@@ -116,7 +116,6 @@ h2{font-family:var(--display);font-weight:700;font-size:1.3rem;text-transform:up
 .chips{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
 .chip{font:600 .85rem var(--num);padding:3px 7px;border-radius:6px;background:var(--chip);font-variant-numeric:tabular-nums}
 .chip small{font:400 .7rem var(--body);color:var(--muted);margin-left:4px}
-.sess button{background:transparent;border:0;color:var(--muted);font-size:.8rem;cursor:pointer;padding:2px 4px}
 .none{font-size:.85rem;color:var(--muted)}
 .more{font:600 .8rem var(--body);background:transparent;border:0;color:var(--accent);cursor:pointer;padding:2px 0;align-self:flex-start}
 .empty{color:var(--muted);font-size:.95rem;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center}
@@ -235,6 +234,15 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .oitem input{flex:1;min-width:0;font:500 .95rem var(--body);padding:6px 8px;border-radius:8px;border:1px solid var(--accent);background:var(--bg);color:var(--ink)}
 .goalrow{display:grid;grid-template-columns:1fr auto auto;gap:6px}
 .goalrow input{font:600 1rem var(--num);padding:9px 10px}
+.goalcard{gap:6px;padding:12px 16px}.goalcard .lbl{margin-bottom:0}
+.goalrow .use{padding:8px 14px;font-size:.9rem}
+/* tappable set chips */
+button.chip{border:1px solid transparent;background:var(--chip);color:var(--ink);cursor:pointer;line-height:1.4;font:600 .85rem var(--num);padding:3px 7px;border-radius:6px}
+button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 18%,var(--chip))}
+.setbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 10px;border-radius:10px;
+  border:1px solid var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface));font:600 .9rem var(--num);width:100%}
+.small.warn{color:var(--danger);margin:0}
+.small.tip{margin:0 0 2px}
 </style>
 </head>
 <body>
@@ -319,6 +327,10 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
         <button class="save" id="bwSave">Save</button>
       </div>
     </div>
+    <div class="card goalcard">
+      <label class="lbl" for="goalIn" id="goalLbl">Goal weight (kg)</label>
+      <div class="goalrow"><input type="text" id="goalIn" inputmode="decimal" placeholder="e.g. 78"><button class="use primary" id="goalSave">Set goal</button><button class="use" id="goalClear">Clear</button></div>
+    </div>
     <div id="bodyBody"></div>
   </section>
 
@@ -360,10 +372,6 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
         <div class="srow"><span>Rest time</span><div class="mini"><button id="restDown" aria-label="Shorter rest">−</button><span id="restSecLbl">1:30</span><button id="restUp" aria-label="Longer rest">+</button></div></div>
       </section>
 
-      <section class="drawer-sec">
-        <label class="lbl" for="goalIn" id="goalLbl">Goal body weight (kg)</label>
-        <div class="goalrow"><input type="text" id="goalIn" inputmode="decimal" placeholder="e.g. 78"><button class="use primary" id="goalSave">Save</button><button class="use" id="goalClear">Clear</button></div>
-      </section>
 
       <section class="drawer-sec">
         <span class="lbl">Workout days</span>
