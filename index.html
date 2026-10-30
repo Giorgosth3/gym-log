@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Gym Log</title>
+<meta name="description" content="Log your gym sets and see what you lifted last time.">
+<meta name="theme-color" content="#121518">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one narrow column — entry card, history by day, account + tools at the foot */
+:root{
+  --bg:#eef0f2; --surface:#ffffff; --ink:#15191e; --muted:#5d6874; --line:#d5dade;
+  --accent:#d94f1e; --accent-ink:#ffffff; --ok:#1f8a4c; --chip:#e2e6ea;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",Arial,sans-serif;
+  --num:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#121518; --surface:#1b2026; --ink:#eef1f4; --muted:#93a0ad; --line:#2c333b;
+  --accent:#ff6a33; --accent-ink:#16100c; --ok:#3fc27a; --chip:#262d35; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.wrap{max-width:520px;margin:0 auto;padding-block:16px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-family:var(--display);font-weight:700;font-size:2rem;letter-spacing:.02em;margin:0;text-transform:uppercase}
+.days{display:flex;gap:8px;flex-wrap:wrap}
+.days button{flex:1 1 0;min-width:70px;font:600 .95rem var(--body);padding:10px 6px;border-radius:999px;
+  border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer}
+.days button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px}
+label.lbl{font:600 .75rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
+select,input[type=text],input[type=date]{width:100%;font:500 1.05rem var(--body);padding:12px;border-radius:10px;
+  border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+#date{width:auto;font:500 .9rem var(--num);padding:6px 8px}
+.hint{font-size:.85rem;color:var(--muted);min-height:1.2em}
+.hint b{font-family:var(--num);font-weight:500;color:var(--ink)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stepper{display:grid;grid-template-columns:48px 1fr 48px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg)}
+.stepper button{font:700 1.4rem var(--num);background:transparent;border:0;color:var(--ink);cursor:pointer}
+.stepper button:active{background:var(--chip)}
+.stepper input{width:100%;min-width:0;text-align:center;font:700 1.5rem var(--num);border:0;background:transparent;color:var(--ink);padding:10px 0}
+.save{font:700 1.3rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:16px;border:0;border-radius:12px;
+  background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.save:disabled{opacity:.5;cursor:default}
+.toast{font-size:.9rem;color:var(--ok);min-height:1.3em;text-align:center}
+.toast.err{color:var(--accent)}
+h2{font-family:var(--display);font-weight:700;font-size:1.3rem;text-transform:uppercase;letter-spacing:.04em;margin:0}
+.group{display:flex;flex-direction:column;gap:8px}
+#history{display:flex;flex-direction:column;gap:8px}
+.ex-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.ex-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ex-head h3{margin:0;font:600 1.02rem var(--body);min-width:0;overflow-wrap:anywhere}
+.use{font:600 .8rem var(--body);padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btns{display:flex;gap:6px;flex-shrink:0}
+.ex-head.renaming{display:grid;grid-template-columns:1fr auto auto;gap:6px}
+.ex-head.renaming input{width:100%;min-width:0;font:500 1rem var(--body);padding:8px 10px;border-radius:8px;border:1px solid var(--accent);background:var(--bg);color:var(--ink)}
+.use.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.sess{display:grid;grid-template-columns:4.6em 1fr auto;gap:8px;align-items:start;padding-top:6px;border-top:1px solid var(--line)}
+.sess .d{font:500 .8rem var(--num);color:var(--muted);padding-top:3px}
+.sess.latest .d{color:var(--accent);font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.chip{font:700 .85rem var(--num);padding:3px 7px;border-radius:6px;background:var(--chip);font-variant-numeric:tabular-nums}
+.chip small{font:400 .7rem var(--body);color:var(--muted);margin-left:4px}
+.sess button{background:transparent;border:0;color:var(--muted);font-size:.8rem;cursor:pointer;padding:2px 4px}
+.none{font-size:.85rem;color:var(--muted)}
+.more{font:600 .8rem var(--body);background:transparent;border:0;color:var(--accent);cursor:pointer;padding:2px 0;align-self:flex-start}
+.empty{color:var(--muted);font-size:.95rem;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center}
+.foot{display:flex;flex-direction:column;gap:10px}
+.ghost{font:600 1rem var(--body);padding:13px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+details summary{cursor:pointer;color:var(--muted);font-size:.9rem;padding:4px 0}
+.addrow{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.status{font-size:.8rem;color:var(--muted);text-align:center}
+.account{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.85rem;color:var(--muted);
+  border-top:1px solid var(--line);padding-top:12px}
+.account span{min-width:0;overflow-wrap:anywhere}
+.link{background:transparent;border:0;color:var(--accent);font:600 .85rem var(--body);cursor:pointer;padding:4px}
+/* sign-in screen */
+.gate{min-height:80vh;display:flex;flex-direction:column;justify-content:center;gap:22px}
+.gate img{width:88px;height:88px;border-radius:20px}
+.gate h1{font-size:2.8rem;line-height:1}
+.gate p{margin:0;color:var(--muted);max-width:34ch}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;font:600 1.05rem var(--body);padding:14px;border-radius:12px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.gbtn svg{width:20px;height:20px}
+.small{font-size:.8rem;color:var(--muted)}
+@media (prefers-reduced-motion: no-preference){.save:active{transform:scale(.99)}}
+</style>
+</head>
+<body>
+
+<div class="wrap gate" id="gate" hidden>
+  <img src="icons/icon-192.png" alt="">
+  <h1>Gym Log</h1>
+  <p>Log each set as you go and see exactly what you lifted last time. Your log is private and syncs across your devices.</p>
+  <button class="gbtn" id="signin">
+    <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+    Sign in with Google
+  </button>
+  <div class="toast err" id="gateMsg" role="status"></div>
+</div>
+
+<div class="wrap" id="loading"><div class="empty">Loading…</div></div>
+
+<div class="wrap" id="main" hidden>
+  <header>
+    <h1>Gym Log</h1>
+    <input type="date" id="date" aria-label="Session date">
+  </header>
+
+  <div class="days" role="group" aria-label="Workout day">
+    <button data-day="Push">Push</button><button data-day="Pull">Pull</button>
+    <button data-day="Legs">Legs</button><button data-day="Shoulders">Shoulders</button>
+  </div>
+
+  <section class="card" aria-label="Log a set">
+    <div>
+      <label class="lbl" for="ex">Exercise</label>
+      <select id="ex"></select>
+      <div class="hint" id="hint"></div>
+    </div>
+    <div class="pair">
+      <div><label class="lbl" for="w">Weight (kg)</label>
+        <div class="stepper"><button type="button" data-step="w" data-d="-2.5" aria-label="Less weight">−</button>
+          <input id="w" inputmode="decimal" value="20"><button type="button" data-step="w" data-d="2.5" aria-label="More weight">+</button></div></div>
+      <div><label class="lbl" for="r">Reps</label>
+        <div class="stepper"><button type="button" data-step="r" data-d="-1" aria-label="Fewer reps">−</button>
+          <input id="r" inputmode="numeric" value="8"><button type="button" data-step="r" data-d="1" aria-label="More reps">+</button></div></div>
+    </div>
+    <div><label class="lbl" for="note">Note (optional)</label><input type="text" id="note" placeholder="e.g. seat 5, drop set"></div>
+    <button class="save" id="save">Save set</button>
+    <div class="toast" id="toast" role="status"></div>
+  </section>
+
+  <section class="group" aria-label="History">
+    <h2>History</h2>
+    <div class="days" role="group" aria-label="History day" id="histDays">
+      <button data-hday="Push">Push</button><button data-hday="Pull">Pull</button>
+      <button data-hday="Legs">Legs</button><button data-hday="Shoulders">Shoulders</button>
+    </div>
+    <div id="history"></div>
+  </section>
+
+  <section class="foot">
+    <button class="ghost" id="export">Export all sets to Excel</button>
+    <details><summary>Add an exercise to the list</summary>
+      <div class="addrow"><input type="text" id="newEx" placeholder="Exercise name" aria-label="New exercise name"><button class="ghost" id="addEx">Add</button></div>
+    </details>
+    <details><summary>Import sets from an Excel file</summary>
+      <p class="small">Use a file exported from Gym Log (columns: Date, Day, Exercise, Weight (kg), Reps, Notes). Sets you already have are skipped.</p>
+      <input type="file" id="importFile" accept=".xlsx,.xls,.csv" aria-label="Excel file to import">
+    </details>
+    <div class="status" id="status"></div>
+    <div class="account"><span id="who"></span><button class="link" id="signout">Sign out</button></div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
