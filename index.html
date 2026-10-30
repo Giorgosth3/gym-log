@@ -21,7 +21,7 @@
 /* Layout: one narrow column — entry card, history by day, account + tools at the foot */
 :root{
   --bg:#f7f5f2; --surface:#ffffff; --ink:#1f1c19; --muted:#6b655d; --line:#e5e0d9;
-  --accent:#d94f1e; --accent-ink:#ffffff; --ok:#1f8a4c; --chip:#efebe5; --danger:#c62828;
+  --accent:#d94f1e; --accent-ink:#ffffff; --ok:#1f8a4c; --chip:#efebe5; --danger:#c62828; --warn:#b26a00;
   --pressed:var(--ink); --pressed-ink:var(--bg);
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:"Barlow",Arial,sans-serif;
@@ -31,24 +31,24 @@
 /* Colours: Auto follows the phone; Light / Dark / AEL are picked at the bottom of the app */
 @media (prefers-color-scheme: dark){:root:not([data-theme]){
   --bg:#121518; --surface:#1b2026; --ink:#eef1f4; --muted:#93a0ad; --line:#2c333b;
-  --accent:#ff6a33; --accent-ink:#16100c; --ok:#3fc27a; --chip:#262d35; --danger:#e5484d; color-scheme:dark}}
+  --accent:#ff6a33; --accent-ink:#16100c; --ok:#3fc27a; --chip:#262d35; --danger:#e5484d; --warn:#f5b041; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#121518; --surface:#1b2026; --ink:#eef1f4; --muted:#93a0ad; --line:#2c333b;
-  --accent:#ff6a33; --accent-ink:#16100c; --ok:#3fc27a; --chip:#262d35; --danger:#e5484d; color-scheme:dark}
+  --accent:#ff6a33; --accent-ink:#16100c; --ok:#3fc27a; --chip:#262d35; --danger:#e5484d; --warn:#f5b041; color-scheme:dark}
 /* AEL: deep club blue with yellow highlights */
 :root[data-theme="ael"]{
   --bg:#0a1d4a; --surface:#10275e; --ink:#f4f7ff; --muted:#a9b9e3; --line:#20397a;
-  --accent:#ffd200; --accent-ink:#0a1d4a; --ok:#ffd200; --chip:#183172; --danger:#ff7a7a;
+  --accent:#ffd200; --accent-ink:#0a1d4a; --ok:#ffd200; --chip:#183172; --danger:#ff7a7a; --warn:#ffb347;
   --pressed:#ffd200; --pressed-ink:#0a1d4a; color-scheme:dark}
 /* AEL Yellow: club yellow with dark blue buttons */
 :root[data-theme="ael-yellow"]{
   --bg:#ffd200; --surface:#ffe35a; --ink:#0a1d4a; --muted:#3b4a75; --line:#e0b800;
-  --accent:#0a1d4a; --accent-ink:#ffd200; --ok:#0a1d4a; --chip:#ffeb8a; --danger:#b3261e;
+  --accent:#0a1d4a; --accent-ink:#ffd200; --ok:#0a1d4a; --chip:#ffeb8a; --danger:#b3261e; --warn:#8a4b00;
   --pressed:#0a1d4a; --pressed-ink:#ffd200; color-scheme:light}
 /* AEL Soft: pale yellow, easier on the eyes */
 :root[data-theme="ael-soft"]{
   --bg:#fff3bf; --surface:#fffbea; --ink:#0a1d4a; --muted:#46557f; --line:#f0dd8a;
-  --accent:#0a1d4a; --accent-ink:#ffd200; --ok:#0a1d4a; --chip:#ffe680; --danger:#b3261e;
+  --accent:#0a1d4a; --accent-ink:#ffd200; --ok:#0a1d4a; --chip:#ffe680; --danger:#b3261e; --warn:#8a4b00;
   --pressed:#0a1d4a; --pressed-ink:#ffd200; color-scheme:light}
 .theme-row{display:flex;flex-direction:column;gap:8px}
 .theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -243,6 +243,60 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
   border:1px solid var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface));font:600 .9rem var(--num);width:100%}
 .small.warn{color:var(--danger);margin:0}
 .small.tip{margin:0 0 2px}
+
+/* ---- coaching features ---- */
+.wucard{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border:1px dashed var(--line);border-radius:12px}
+.wucard b{display:block;font-weight:600}
+.suggest{display:flex;gap:10px;align-items:center;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--ok);
+  background:color-mix(in srgb,var(--ok) 10%,var(--surface))}
+.suggest .ar{font:700 1.4rem var(--num);color:var(--ok)}
+.suggest b{display:block;font:700 1.1rem var(--num);color:var(--ok)}
+.suggest .small{display:block;line-height:1.3}
+.suggest.hold{border-color:var(--line);background:var(--surface)}.suggest.hold b,.suggest.hold .ar{color:var(--ink)}
+.rirbox{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:var(--surface)}
+.chip.wu,button.chip.wu{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
+.chip .rir{font:500 .7rem var(--num);color:var(--muted);margin-left:4px}
+.seg.big button{padding:10px 4px;font-size:.95rem}
+textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);resize:vertical}
+.mini.wide{grid-template-columns:36px 64px 36px}
+.alert{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:12px;font-size:.9rem;
+  border:1px solid var(--warn);background:color-mix(in srgb,var(--warn) 10%,var(--surface))}
+.alert b{color:var(--warn)}
+.alert.okay{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--surface))}.alert.okay b{color:var(--ok)}
+.tags{display:flex;flex-wrap:wrap;gap:6px}.tags span{font:600 .78rem var(--body);padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--chip)}
+.bigstat{font:700 1.6rem var(--num)}.bigstat small{font:600 .85rem var(--num);margin-left:6px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal span{aspect-ratio:1;border-radius:7px;background:var(--chip);font:500 .75rem var(--num);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.cal span.t{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.cal span.today{outline:2px solid var(--ink);outline-offset:-2px}
+.cal span.blank{background:transparent}
+.cal .wd{background:transparent;aspect-ratio:auto;font:600 .7rem var(--body)}
+.calhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.calhead button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--chip);color:var(--ink);font:700 1rem var(--num);cursor:pointer}
+.weeks{display:flex;gap:6px;align-items:flex-end;height:80px;position:relative}
+.weeks div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;font:500 .62rem var(--num);color:var(--muted);height:100%;min-width:0}
+.weeks i{display:block;width:100%;border-radius:4px 4px 0 0;background:var(--accent);min-height:2px}
+.weeks i.low{background:var(--chip);border:1px solid var(--line)}
+.weeks .n{font:700 .72rem var(--num);color:var(--ink)}
+/* warm-up layer */
+.wulayer{position:fixed;inset:0;z-index:18;background:var(--bg);overflow-y:auto;
+  padding:calc(env(safe-area-inset-top,0px) + 20px) max(16px,env(safe-area-inset-right,0px)) calc(96px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.wuinner{max-width:480px;margin:0 auto;display:flex;flex-direction:column;align-items:stretch;gap:12px;text-align:center}
+.ring{width:200px;height:200px;position:relative;align-self:center}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 2.8rem var(--num);font-variant-numeric:tabular-nums}
+.wulayer .olist{text-align:left}
+.wuitem{display:flex;align-items:center;gap:10px;width:100%;background:transparent;border:0;border-top:1px solid var(--line);color:var(--ink);font:500 .95rem var(--body);padding:11px 12px;text-align:left;cursor:pointer}
+.wuitem:first-child{border-top:0}
+.wuitem .box{width:22px;height:22px;border-radius:6px;border:2px solid var(--line);flex-shrink:0}
+.wuitem[aria-pressed="true"] .box{background:var(--ok);border-color:var(--ok)}
+.wuitem[aria-pressed="true"] span:last-child{color:var(--muted);text-decoration:line-through}
+.hold{position:relative;overflow:hidden;font:600 1rem var(--body);padding:13px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none}
+.hold i{position:absolute;inset:0;width:0;background:color-mix(in srgb,var(--danger) 30%,transparent)}
+.hold span{position:relative}
+.small.center{text-align:center}
+.tabbar button:disabled{opacity:.35;cursor:not-allowed}
+.icon-btn:disabled{opacity:.35}
 </style>
 </head>
 <body>
@@ -276,10 +330,15 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
 
   <!-- TRAINING -->
   <section class="pane" id="pane-training" aria-label="Training">
+    <div class="wucard" id="wuCard">
+      <div><b>Warm-up</b><span class="small" id="wuLen">8 min · recommended before lifting</span></div>
+      <button class="use primary" id="wuStart">Start</button>
+    </div>
     <div class="card">
       <div>
         <label class="lbl" for="ex">Exercise</label>
         <select id="ex"></select>
+        <div class="suggest" id="suggest" hidden></div>
         <div class="hint lastrow" id="hint" style="margin-top:8px"></div>
       </div>
       <div class="pair">
@@ -291,7 +350,13 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
             <input id="r" inputmode="numeric" value="8"><button type="button" data-step="r" data-dir="1" aria-label="More reps">+</button></div></div>
       </div>
       <div><label class="lbl" for="note">Note (optional)</label><input type="text" id="note" placeholder="e.g. seat 5, drop set"></div>
+      <div class="srow"><label for="wuSet">Warm-up set <span class="small">(not counted in PBs or progress)</span></label><span class="switch"><input type="checkbox" id="wuSet"><span></span></span></div>
       <button class="save" id="save">Save set</button>
+    </div>
+    <div class="rirbox" id="rirBox" hidden>
+      <span class="lbl" id="rirLbl">How many more reps could you have done?</span>
+      <div class="seg" role="group" aria-labelledby="rirLbl"><button data-rir="0">0</button><button data-rir="1">1</button><button data-rir="2">2</button><button data-rir="3">3+</button></div>
+      <span class="small">Optional, one tap. Helps the app judge when to suggest more weight.</span>
     </div>
     <div class="rest" id="restBox" hidden>
       <div><span class="small" id="restLbl">Rest timer</span><b id="restTime">1:30</b></div>
@@ -310,11 +375,15 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
 
   <!-- PROGRESS -->
   <section class="pane" id="pane-progress" aria-label="Progress" hidden>
-    <div class="two">
-      <div><label class="lbl" for="pDay">Workout</label><select id="pDay"></select></div>
-      <div><label class="lbl" for="pEx">Exercise</label><select id="pEx"></select></div>
+    <div class="seg big" role="group" aria-label="Progress view"><button data-pview="ex">Exercises</button><button data-pview="cons">Consistency</button></div>
+    <div class="pane" id="pvEx">
+      <div class="two">
+        <div><label class="lbl" for="pDay">Workout</label><select id="pDay"></select></div>
+        <div><label class="lbl" for="pEx">Exercise</label><select id="pEx"></select></div>
+      </div>
+      <div class="pane" id="progBody"></div>
     </div>
-    <div id="progBody"></div>
+    <div class="pane" id="pvCons" hidden></div>
   </section>
 
   <!-- BODY -->
@@ -326,6 +395,7 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
           <input id="bw" inputmode="decimal" value="75"><button type="button" id="bwPlus" aria-label="More">+</button></div>
         <button class="save" id="bwSave">Save</button>
       </div>
+      <span class="small">Tip: weigh in the same way each time: morning, after the bathroom, before eating.</span>
     </div>
     <div class="card goalcard">
       <label class="lbl" for="goalIn" id="goalLbl">Goal weight (kg)</label>
@@ -333,6 +403,19 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
     </div>
     <div id="bodyBody"></div>
   </section>
+
+  <div class="wulayer" id="wuLayer" hidden role="dialog" aria-modal="true" aria-labelledby="wuTitle">
+    <div class="wuinner">
+      <span class="lbl" id="wuTitle">Warm-up</span>
+      <div class="ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--chip)" stroke-width="8"/><circle id="wuArc" cx="50" cy="50" r="44" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><b id="wuTime" aria-live="off">8:00</b></div>
+      <span class="small" id="wuOf">of 8:00</span>
+      <div class="olist" id="wuList"></div>
+      <button class="save" id="wuDone" hidden>Start workout</button>
+      <button class="ghost" id="wuSkip">Skip warm-up</button>
+      <button class="hold" id="wuHold" hidden><i></i><span>Hold to skip warm-up</span></button>
+      <span class="small center" id="wuLockMsg" hidden>🔒 Commit mode is on. Your log unlocks when the timer ends. You can turn this off in ☰ Settings.</span>
+    </div>
+  </div>
 
   <div id="toast" role="status" aria-live="polite"></div>
 
@@ -370,6 +453,23 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
         <span class="lbl">Rest timer</span>
         <div class="srow"><label for="restOn">Start after each set</label><span class="switch"><input type="checkbox" id="restOn"><span></span></span></div>
         <div class="srow"><span>Rest time</span><div class="mini"><button id="restDown" aria-label="Shorter rest">−</button><span id="restSecLbl">1:30</span><button id="restUp" aria-label="Longer rest">+</button></div></div>
+      </section>
+
+      <section class="drawer-sec">
+        <span class="lbl">Training targets</span>
+        <div class="srow"><span>Rep range</span><div class="mini wide"><button id="repMinDown" aria-label="Lower minimum reps">−</button><span id="repMinLbl">8</span><button id="repMinUp" aria-label="Higher minimum reps">+</button></div></div>
+        <div class="srow"><span></span><div class="mini wide"><button id="repMaxDown" aria-label="Lower maximum reps">−</button><span id="repMaxLbl">12</span><button id="repMaxUp" aria-label="Higher maximum reps">+</button></div></div>
+        <span class="small" id="repHelp">When every working set reaches 12 reps, the app suggests adding weight.</span>
+        <div class="srow"><span>Sessions per week</span><div class="mini"><button id="weekDown" aria-label="Fewer sessions">−</button><span id="weekLbl">4</span><button id="weekUp" aria-label="More sessions">+</button></div></div>
+      </section>
+
+      <section class="drawer-sec">
+        <span class="lbl">Warm-up</span>
+        <div class="srow"><span>Length</span><div class="mini"><button id="wuMinDown" aria-label="Shorter warm-up">−</button><span id="wuMinLbl">8 min</span><button id="wuMinUp" aria-label="Longer warm-up">+</button></div></div>
+        <div class="srow"><label for="commitOn">Commit mode <span class="small">(lock the app until the warm-up ends)</span></label><span class="switch"><input type="checkbox" id="commitOn"><span></span></span></div>
+        <label class="small" for="wuItems">Checklist, one item per line</label>
+        <textarea id="wuItems" rows="4"></textarea>
+        <button class="use" id="wuItemsSave" style="align-self:flex-start">Save checklist</button>
       </section>
 
 

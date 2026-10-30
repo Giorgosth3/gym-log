@@ -9,7 +9,8 @@ const BASE = {
   Legs: ["Hack squat", "Hamstring curls", "Leg extensions (aristera)", "Calves"],
   Shoulders: ["Shoulder press", "Lateral raises machine", "Face pulls"]
 };
-const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null };
+const DEFAULT_WU = ["3 min easy cardio (bike or rower)", "Arm circles and band pull-aparts × 15", "10 bodyweight reps of your first movement", "1–2 light sets of your first exercise"];
+const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null, repMin: 8, repMax: 12, weekTarget: 4, wuMin: 8, commit: false, wuItems: DEFAULT_WU };
 const KG_LB = 2.20462;
 
 /* ---------- helpers ---------- */
@@ -47,6 +48,8 @@ const wStep = () => U() === "lbs" ? 5 : 2.5;
 function show(which) { ["gate", "loading", "main"].forEach(id => { $(id).hidden = id !== which; }); }
 const exercisesFor = d => [...(lists[d] || [])];
 function allSets() { const out = []; Object.values(sessions).forEach(s => (s.sets || []).forEach(x => out.push({ ...x, date: s.date }))); return out; }
+const working = sets => sets.filter(s => !s.wu);
+const e1rm = s => s.r <= 1 ? s.w : s.w * (1 + s.r / 30);   // Epley estimate of a 1-rep max
 function namesFor(d) { const n = exercisesFor(d); allSets().forEach(s => { if (s.day === d && !n.includes(s.ex)) n.push(s.ex); }); return n; }
 
 function toast(msg, err) {
@@ -85,18 +88,19 @@ function renderSelect() {
   sel.innerHTML = "";
   namesFor(day).forEach(n => sel.appendChild(el("option", null, n)));
   if (keep && namesFor(day).includes(keep)) sel.value = keep;
-  renderHint(); renderToday();
+  renderHint(); renderToday(); renderSuggest(true);
 }
 // sets: chips; when `rerender` is given, chips are tappable and tapping one offers "Remove set"
 function chipsInto(box, sets, rerender) {
   sets.forEach(s => {
     const label = fmtW(s.w) + " × " + s.r;
-    const c = el(rerender ? "button" : "span", "chip", label);
+    const c = el(rerender ? "button" : "span", "chip" + (s.wu ? " wu" : ""), label);
+    if (s.rir != null) c.appendChild(el("span", "rir", s.rir >= 3 ? "3+ left" : s.rir + " left"));
     if (s.note) c.appendChild(el("small", null, s.note));
     if (rerender) {
       const key = s.date + "|" + s.t, on = selSet === key;
       c.type = "button"; c.classList.add("tap"); if (on) c.classList.add("sel");
-      c.setAttribute("aria-pressed", on); c.setAttribute("aria-label", label + (s.note ? ", " + s.note : "") + ", " + longDate(s.date) + ". Tap for options");
+      c.setAttribute("aria-pressed", on); c.setAttribute("aria-label", (s.wu ? "Warm-up " : "") + label + (s.note ? ", " + s.note : "") + ", " + longDate(s.date) + ". Tap for options");
       c.onclick = () => { selSet = on ? null : key; rerender(); };
     }
     box.appendChild(c);
@@ -111,6 +115,30 @@ function setBar(sets, rerender) {
   no.onclick = () => { selSet = null; rerender(); };
   const b = el("div", "btns"); b.append(yes, no); bar.appendChild(b);
   return bar;
+}
+// #1 progressive overload: what to lift today, from your last session's working sets
+function suggestionFor(ex, before) {
+  const prev = working(allSets().filter(s => s.ex === ex && s.date < before));
+  if (!prev.length) return null;
+  const last = prev.reduce((a, s) => s.date > a ? s.date : a, "");
+  const sets = prev.filter(s => s.date === last);
+  const top = Math.max(...sets.map(s => s.w)), atTop = sets.filter(s => s.w === top);
+  const lo = prefs.repMin, hi = prefs.repMax, best = Math.max(...atTop.map(s => s.r));
+  const allTop = atTop.every(s => s.r >= hi);
+  const rated = atTop.filter(s => s.rir != null), allFailure = rated.length === atTop.length && rated.every(s => s.rir === 0);
+  if (allTop && !allFailure) return { up: true, w: top, next: disp(top) + wStep(), reps: lo + "–" + hi, why: "Last time you hit " + hi + "+ reps on every working set at " + fmtW(top) + ", so go up " + trim(wStep()) + U() + "." };
+  if (allTop && allFailure) return { up: false, w: top, next: disp(top), reps: lo + "–" + hi, why: "You reached " + hi + " reps but every set was to failure. Stay here until it feels a little easier." };
+  const target = Math.min(hi, Math.max(lo, best + 1));
+  return { up: false, w: top, next: disp(top), reps: String(target), why: best < lo ? "Last time your best set was " + best + " reps. Build up to " + lo + " at this weight." : "Last time your best set at " + fmtW(top) + " was " + best + " reps. Aim for " + target + "." };
+}
+function renderSuggest(prefill) {
+  const ex = $("ex").value, box = $("suggest"); box.innerHTML = "";
+  const sg = ex ? suggestionFor(ex, $("date").value) : null;
+  box.hidden = !sg; if (!sg) return;
+  box.className = "suggest" + (sg.up ? "" : " hold");
+  const t = el("div"); t.append(el("b", null, "Today: " + trim(sg.next) + U() + " × " + sg.reps), el("span", "small", sg.why));
+  box.append(el("span", "ar", sg.up ? "↑" : "→"), t);
+  if (prefill) { $("w").value = trim(sg.next); $("r").value = String(sg.up ? prefs.repMin : parseInt(sg.reps, 10)); }
 }
 function renderHint() {
   const ex = $("ex").value, cur = $("date").value, h = $("hint"); h.innerHTML = "";
@@ -141,16 +169,78 @@ function saveSet() {
   if (!(v >= 0) || !(r > 0)) { toast("Enter a weight and at least 1 rep.", true); return; }
   const date = $("date").value || todayISO(), ex = $("ex").value;
   if (!ex) { toast("Pick an exercise first.", true); return; }
-  const w = toKg(v);
-  const prevMax = Math.max(-1, ...allSets().filter(s => s.ex === ex).map(s => s.w));
+  const w = toKg(v), wu = $("wuSet").checked, t = Date.now();
+  const prevMax = Math.max(-1, ...working(allSets().filter(s => s.ex === ex)).map(s => s.w));
   const s = sessions[date] || { date, sets: [] };
-  const next = { date, sets: [...(s.sets || []), { day, ex, w, r, note: $("note").value.trim(), t: Date.now() }] };
+  const set = { day, ex, w, r, note: $("note").value.trim(), t }; if (wu) set.wu = true;
+  const next = { date, sets: [...(s.sets || []), set] };
   sessions[date] = next; renderHint(); renderToday();
   writeSession(date, next);
-  const n = next.sets.filter(x => x.ex === ex).length;
-  toast((prevMax >= 0 && w > prevMax ? "New personal best! " : "Saved: ") + ex + " set " + n + " — " + fmtW(w) + " × " + r + offlineNote());
+  const n = working(next.sets.filter(x => x.ex === ex)).length;
+  toast(wu ? "Warm-up saved: " + fmtW(w) + " × " + r + offlineNote()
+    : (prevMax >= 0 && w > prevMax ? "New personal best! " : "Saved: ") + ex + " set " + n + " — " + fmtW(w) + " × " + r + offlineNote());
   $("note").value = "";
+  rirFor = wu ? null : { date, t }; $("rirBox").hidden = wu;
+  document.querySelectorAll("[data-rir]").forEach(b => b.setAttribute("aria-pressed", "false"));
   if (prefs.restOn) startRest(prefs.restSec);
+}
+
+/* ---------- reps left (RIR) for the set just saved ---------- */
+let rirFor = null;
+function setRir(v) {
+  if (!rirFor) return;
+  const s = sessions[rirFor.date]; if (!s) return;
+  const next = { date: s.date, sets: s.sets.map(x => x.t === rirFor.t ? { ...x, rir: v } : x) };
+  sessions[s.date] = next; writeSession(s.date, next); renderToday();
+  document.querySelectorAll("[data-rir]").forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.rir) === v)));
+  setTimeout(() => { $("rirBox").hidden = true; }, 500);
+}
+
+/* ---------- warm-up timer (optional commit lock) ---------- */
+let wuTick = null;
+function wuItems() { return (prefs.wuItems && prefs.wuItems.length ? prefs.wuItems : DEFAULT_WU); }
+function startWarmup() {
+  mem.set("wuEnd", String(Date.now() + prefs.wuMin * 60000)); mem.set("wuLen", String(prefs.wuMin * 60)); mem.set("wuDone", "[]");
+  showWarmup();
+}
+function warmLocked() { return prefs.commit && Number(mem.get("wuEnd") || 0) > Date.now(); }
+function applyLock() {
+  const locked = !$("wuLayer").hidden && warmLocked();
+  document.querySelectorAll(".tabbar button").forEach(b => { b.disabled = locked; });
+  $("menuOpen").disabled = locked;
+  $("wuSkip").hidden = locked || !Number(mem.get("wuEnd") || 0); $("wuHold").hidden = !locked; $("wuLockMsg").hidden = !locked;
+}
+function showWarmup() {
+  $("wuLayer").hidden = false; $("wuDone").hidden = true;
+  const total = Number(mem.get("wuLen") || prefs.wuMin * 60);
+  $("wuTitle").textContent = "Warm-up · " + day; $("wuOf").textContent = "of " + fmtSec(total);
+  let done = []; try { done = JSON.parse(mem.get("wuDone") || "[]"); } catch (e) {}
+  const list = $("wuList"); list.innerHTML = "";
+  wuItems().forEach((it, i) => {
+    const b = el("button", "wuitem"); b.setAttribute("aria-pressed", String(done.includes(i)));
+    b.append(el("span", "box"), el("span", null, it));
+    b.onclick = () => { const on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", String(on));
+      done = on ? [...done, i] : done.filter(x => x !== i); mem.set("wuDone", JSON.stringify(done)); };
+    list.appendChild(b);
+  });
+  clearInterval(wuTick);
+  const tick = () => {
+    const left = (Number(mem.get("wuEnd") || 0) - Date.now()) / 1000;
+    if (left <= 0) {
+      clearInterval(wuTick); wuTick = null; mem.set("wuEnd", "");
+      $("wuTime").textContent = "Done"; $("wuArc").setAttribute("stroke-dashoffset", "0");
+      $("wuDone").hidden = false; applyLock();
+      try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch (e) {}
+      return;
+    }
+    $("wuTime").textContent = fmtSec(Math.ceil(left));
+    $("wuArc").setAttribute("stroke-dashoffset", String(276.5 * (1 - left / total)));
+  };
+  tick(); wuTick = setInterval(tick, 250); applyLock();
+}
+function closeWarmup(msg) {
+  clearInterval(wuTick); wuTick = null; mem.set("wuEnd", "");
+  $("wuLayer").hidden = true; applyLock(); setTab("training"); if (msg) toast(msg);
 }
 
 /* ---------- rest timer ---------- */
@@ -265,7 +355,7 @@ function niceTicks(lo, hi) {
 // Line chart as SVG. pts: [{label, v}], opts.goal draws a dashed target line.
 function lineChart(pts, opts = {}) {
   const W = 340, H = 180, L = 36, R = 12, T = 14, B = 26;
-  const vals = pts.map(p => p.v).concat(opts.goal != null ? [opts.goal] : []);
+  const vals = pts.map(p => p.v).concat(opts.goal != null ? [opts.goal] : [], opts.avg || []);
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (hi - lo < 1) { lo -= 1; hi += 1; }
   const padv = (hi - lo) * 0.12; lo -= padv; hi += padv;
@@ -283,6 +373,12 @@ function lineChart(pts, opts = {}) {
     add("line", { x1: L, x2: W - R, y1: y(opts.goal), y2: y(opts.goal), stroke: "var(--ok)", "stroke-dasharray": "5 4", "stroke-width": 1.5 });
     add("text", { x: W - R, y: y(opts.goal) - 6, "text-anchor": "end", "font-size": 11, fill: "var(--ok)", "font-family": "Rubik, sans-serif" }, "Goal " + trim(opts.goal));
   }
+  if (opts.avg) { // raw values as faint dots, the average as the line
+    pts.forEach((p, i) => add("circle", { cx: x(i), cy: y(p.v), r: 2.8, fill: muted, opacity: .75 }));
+    if (pts.length > 1) add("path", { d: opts.avg.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" "), fill: "none", stroke: "var(--accent)", "stroke-width": 3, "stroke-linejoin": "round", "stroke-linecap": "round" });
+    const li = pts.length - 1; add("circle", { cx: x(li), cy: y(opts.avg[li]), r: 5.5, fill: "var(--accent)" });
+    return svg;
+  }
   if (pts.length > 1) {
     const d = pts.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.v).toFixed(1)).join(" ");
     if (opts.area) add("path", { d: d + ` L ${x(pts.length - 1)} ${H - B} L ${x(0)} ${H - B} Z`, fill: "var(--accent)", opacity: .12 });
@@ -293,6 +389,10 @@ function lineChart(pts, opts = {}) {
 }
 function stat(value, label, cls) { const s = el("div", "stat"), b = el("b", cls || null, value); s.append(b, el("span", null, label)); return s; }
 function renderProgress() {
+  const view = mem.get("pView") === "cons" ? "cons" : "ex";
+  document.querySelectorAll("[data-pview]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.pview === view)));
+  $("pvEx").hidden = view !== "ex"; $("pvCons").hidden = view !== "cons";
+  if (view === "cons") { renderConsistency(); return; }
   const pDay = $("pDay"), pEx = $("pEx");
   let pd = mem.get("pDay"); if (!days.includes(pd)) pd = day;
   pDay.innerHTML = ""; days.forEach(d => pDay.appendChild(el("option", null, d))); pDay.value = pd;
@@ -300,27 +400,95 @@ function renderProgress() {
   pEx.innerHTML = ""; names.forEach(n => pEx.appendChild(el("option", null, n))); pEx.value = pe;
   const box = $("progBody"); box.innerHTML = "";
   if (!pe) { box.appendChild(el("div", "empty", "No exercises in " + pd + " yet.")); return; }
-  const sets = allSets().filter(s => s.ex === pe && s.day === pd);
-  if (!sets.length) { box.appendChild(el("div", "empty", "No sets logged for " + pe + " yet. Log one in Training and your progress will show here.")); return; }
-  // personal best: heaviest weight, then most reps
-  const pb = sets.reduce((a, s) => (s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a);
-  const pbCard = el("div", "card"), pbRow = el("div", "pb"), left = el("div");
-  left.append(el("span", "lbl", "Personal best"), el("b", null, fmtW(pb.w) + " × " + pb.r));
-  pbRow.append(left, el("span", "badge", "PB · " + shortDate(pb.date))); pbCard.appendChild(pbRow); box.appendChild(pbCard);
-  // top weight per session
-  const byDate = {}; sets.forEach(s => { byDate[s.date] = Math.max(byDate[s.date] ?? -1, s.w); });
-  const dates = Object.keys(byDate).sort();
-  const chart = el("div", "card chart"); chart.style.gap = "6px";
-  chart.append(el("span", "lbl", "Top weight per session (" + U() + ")"), lineChart(dates.map(d => ({ label: shortDate(d), v: disp(byDate[d]) })), { area: true, label: "Top weight per session for " + pe }));
-  box.appendChild(chart);
-  const change = disp(byDate[dates[dates.length - 1]]) - disp(byDate[dates[0]]);
-  const weekAgo = isoOf(new Date(Date.now() - 6 * 86400e3));
-  const vol = sets.filter(s => s.date >= weekAgo && s.date <= todayISO()).reduce((a, s) => a + disp(s.w) * s.r, 0);
+  const sets = working(allSets().filter(s => s.ex === pe && s.day === pd));
+  if (!sets.length) { box.appendChild(el("div", "empty", "No working sets logged for " + pe + " yet. Log one in Training and your progress will show here.")); }
+  else {
+    // personal best: heaviest working weight, then most reps
+    const pb = sets.reduce((a, s) => (s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a);
+    const pbCard = el("div", "card"), pbRow = el("div", "pb"), left = el("div");
+    left.append(el("span", "lbl", "Personal best"), el("b", null, fmtW(pb.w) + " × " + pb.r));
+    pbRow.append(left, el("span", "badge", "PB · " + shortDate(pb.date))); pbCard.appendChild(pbRow); box.appendChild(pbCard);
+    // #3 chart: estimated max (default) or top weight
+    const metric = mem.get("pMetric") === "top" ? "top" : "est";
+    const per = {}; sets.forEach(s => { const v = metric === "est" ? e1rm(s) : s.w; per[s.date] = Math.max(per[s.date] ?? -1, v); });
+    const dates = Object.keys(per).sort(), first = disp(per[dates[0]]), lastV = disp(per[dates[dates.length - 1]]), change = lastV - first;
+    const chart = el("div", "card chart"); chart.style.gap = "8px";
+    const seg = el("div", "seg");
+    [["est", "Est. max"], ["top", "Top weight"]].forEach(([k, n]) => { const b = el("button", null, n); b.setAttribute("aria-pressed", String(k === metric)); b.onclick = () => { mem.set("pMetric", k); renderProgress(); }; seg.appendChild(b); });
+    const head = el("span", "lbl", metric === "est" ? "Estimated 1-rep max" : "Top weight per session");
+    const big = el("div", "bigstat", trim(lastV) + U());
+    if (dates.length > 1) big.appendChild(el("small", change > 0 ? "good" : "", (change > 0 ? "+" : "") + trim(change) + U() + " since " + shortDate(dates[0])));
+    chart.append(seg, head, big, lineChart(dates.map(d => ({ label: shortDate(d), v: disp(per[d]) })), { area: true, label: (metric === "est" ? "Estimated max" : "Top weight") + " per session for " + pe }));
+    if (metric === "est") chart.appendChild(el("span", "small", "Estimated from your weight and reps, so you see progress even when you add reps instead of weight."));
+    box.appendChild(chart);
+    const weekAgo = isoOf(new Date(Date.now() - 6 * 86400e3));
+    const vol = sets.filter(s => s.date >= weekAgo && s.date <= todayISO()).reduce((a, s) => a + disp(s.w) * s.r, 0);
+    const stats = el("div", "stats");
+    stats.append(stat(String(dates.length), dates.length === 1 ? "session" : "sessions"), stat(fmtW(pb.w), "heaviest set"), stat(Math.round(vol).toLocaleString("en-GB") + U(), "volume last 7 days"));
+    box.appendChild(stats);
+  }
+  // #8 plateau alerts for every exercise in this workout
+  plateausFor(pd).forEach(ex => {
+    const a = el("div", "alert"); const tags = el("div", "tags");
+    ["Aim for +1 rep", "Drop about 10% and build back up", "Swap to a similar exercise"].forEach(t => tags.appendChild(el("span", null, t)));
+    a.append(el("b", null, ex + " has stalled"), el("span", null, "No improvement in your last 3 sessions. Try one of these:"), tags);
+    box.appendChild(a);
+  });
+}
+// An exercise has stalled when its last 3 sessions beat none of the sessions before them.
+function plateausFor(d) {
+  const out = [];
+  namesFor(d).forEach(ex => {
+    const per = {}; working(allSets().filter(s => s.ex === ex && s.day === d)).forEach(s => { per[s.date] = Math.max(per[s.date] ?? 0, e1rm(s)); });
+    const ds = Object.keys(per).sort(); if (ds.length < 4) return;
+    const recent = ds.slice(-3).map(k => per[k]), before = ds.slice(0, -3).map(k => per[k]);
+    if (Math.max(...recent) <= Math.max(...before) + 0.01) out.push(ex);
+  });
+  return out;
+}
+// #5 consistency: calendar, sessions per week, weekly target
+let calMonth = null;
+function trainedDates() { const set = new Set(); Object.values(sessions).forEach(s => { if (working(s.sets || []).length) set.add(s.date); }); return set; }
+const mondayOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+function renderConsistency() {
+  const box = $("pvCons"); box.innerHTML = "";
+  const tr = trainedDates(), now = new Date();
+  if (!calMonth) calMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(), daysIn = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;
+  const card = el("div", "card"), head = el("div", "calhead"), prev = el("button", null, "‹"), next = el("button", null, "›");
+  prev.setAttribute("aria-label", "Previous month"); next.setAttribute("aria-label", "Next month");
+  prev.onclick = () => { calMonth = new Date(y, m - 1, 1); renderConsistency(); };
+  next.onclick = () => { calMonth = new Date(y, m + 1, 1); renderConsistency(); };
+  next.disabled = y === now.getFullYear() && m === now.getMonth();
+  const monthName = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m] + " " + y;
+  head.append(prev, el("span", "lbl", monthName), next);
+  const cal = el("div", "cal"); cal.setAttribute("role", "grid"); cal.setAttribute("aria-label", "Training days in " + monthName);
+  ["M", "T", "W", "T", "F", "S", "S"].forEach(d => cal.appendChild(el("span", "wd", d)));
+  for (let i = 0; i < lead; i++) cal.appendChild(el("span", "blank"));
+  let inMonth = 0;
+  for (let d = 1; d <= daysIn; d++) {
+    const iso = y + "-" + pad(m + 1) + "-" + pad(d), hit = tr.has(iso); if (hit) inMonth++;
+    const c = el("span", (hit ? "t" : "") + (iso === todayISO() ? " today" : ""), String(d));
+    c.setAttribute("aria-label", d + (hit ? ", trained" : "")); cal.appendChild(c);
+  }
+  card.append(head, cal); box.appendChild(card);
+  // last 8 weeks
+  const target = prefs.weekTarget, weeks = [], m0 = mondayOf(now);
+  for (let i = 7; i >= 0; i--) {
+    const start = new Date(m0); start.setDate(start.getDate() - i * 7);
+    const end = new Date(start); end.setDate(end.getDate() + 6);
+    const a = isoOf(start), b = isoOf(end); let n = 0; tr.forEach(d => { if (d >= a && d <= b) n++; });
+    weeks.push({ label: start.getDate() + " " + MON[start.getMonth()], n, current: i === 0 });
+  }
+  const wc = el("div", "card"), wh = el("div", "calhead"); wh.append(el("span", "lbl", "Sessions per week"), el("span", "lbl", "Target " + target + " / week"));
+  const bars = el("div", "weeks"), maxN = Math.max(target, ...weeks.map(w => w.n), 1);
+  weeks.forEach(w => { const d = el("div"), i = el("i", w.n >= target ? "" : "low"); i.style.height = (w.n / maxN * 52 + 2) + "px"; d.append(el("span", "n", String(w.n)), i, el("span", null, w.label)); d.setAttribute("aria-label", "Week of " + w.label + ": " + w.n + " sessions"); bars.appendChild(d); });
+  wc.append(wh, bars); box.appendChild(wc);
+  const full = weeks.filter(w => !w.current), onTarget = full.filter(w => w.n >= target).length, avg = full.reduce((a, w) => a + w.n, 0) / full.length;
   const stats = el("div", "stats");
-  stats.append(stat(String(dates.length), dates.length === 1 ? "session" : "sessions"),
-    stat((change > 0 ? "+" : "") + trim(change) + U(), "since first", change > 0 ? "good" : ""),
-    stat(Math.round(vol).toLocaleString("en-GB") + U(), "volume last 7 days"));
+  stats.append(stat(String(inMonth), "sessions in " + MON[m]), stat(trim(avg), "avg / week"), stat(onTarget + " of " + full.length, "weeks on target"));
   box.appendChild(stats);
+  if (!tr.size) box.appendChild(el("p", "small center", "Your training days will fill in here as you log sets."));
 }
 
 /* ---------- body weight ---------- */
@@ -337,17 +505,34 @@ function renderBody() {
   $("goalClear").hidden = prefs.goal == null;
   const box = $("bodyBody"); box.innerHTML = "";
   if (!ds.length) { box.appendChild(el("div", "empty", "Save your first weigh-in above to start your chart.")); return; }
-  const first = ents[ds[0]], last = ents[ds[ds.length - 1]], goal = prefs.goal;
-  const change = disp(last) - disp(first);
-  const toward = goal != null && Math.sign(change) === Math.sign(disp(goal) - disp(first)) && change !== 0;
+  const goal = prefs.goal, dayMs = 86400e3, toDate = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).getTime(); };
+  // 7-day average for each weigh-in
+  const avg = ds.map(d => { const t = toDate(d), w = ds.filter(x => toDate(x) <= t && toDate(x) > t - 7 * dayMs).map(x => ents[x]); return w.reduce((a, v) => a + v, 0) / w.length; });
+  const nowAvg = avg[avg.length - 1];
+  // weekly rate: trend line through the last 4 weeks of weigh-ins
+  const lastT = toDate(ds[ds.length - 1]), recent = ds.filter(d => toDate(d) > lastT - 28 * dayMs);
+  let rate = null;
+  if (recent.length >= 3 && (toDate(recent[recent.length - 1]) - toDate(recent[0])) >= 7 * dayMs) {
+    const xs = recent.map(d => (toDate(d) - lastT) / (7 * dayMs)), ys = recent.map(d => ents[d]);
+    const mx = xs.reduce((a, v) => a + v, 0) / xs.length, my = ys.reduce((a, v) => a + v, 0) / ys.length;
+    const num = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0), den = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+    rate = den ? num / den : null;
+  }
+  const toward = goal != null && rate != null && Math.sign(rate) === Math.sign(goal - nowAvg) && Math.abs(rate) > 0.02;
   const stats = el("div", "stats");
-  stats.append(stat(fmtW(last), "now"),
-    stat((change > 0 ? "+" : "") + trim(change) + U(), "since start", toward ? "good" : ""),
-    goal != null ? stat(trim(Math.abs(disp(last) - disp(goal))) + U(), Math.abs(last - goal) < 0.05 ? "goal reached!" : "to goal") : stat("—", "no goal set"));
+  const rateStat = rate == null ? stat("—", "per week (needs 1 week+)") : stat((rate > 0 ? "+" : "") + trim(disp(rate)) + U(), "per week · " + trim(Math.abs(rate) / nowAvg * 100) + "%", toward ? "good" : "");
+  stats.append(stat(fmtW(nowAvg), "7-day average"), rateStat,
+    goal != null ? stat(trim(Math.abs(disp(nowAvg) - disp(goal))) + U(), Math.abs(nowAvg - goal) < 0.25 ? "goal reached!" : "to goal") : stat("—", "no goal set"));
   box.appendChild(stats);
   const chart = el("div", "card chart"); chart.style.gap = "6px";
-  chart.append(el("span", "lbl", "Body weight (" + U() + ")"), lineChart(ds.map(d => ({ label: shortDate(d), v: disp(ents[d]) })), { goal: goal != null ? disp(goal) : null, label: "Body weight over time" }));
+  const hd = el("div", "calhead"); hd.append(el("span", "lbl", "Body weight (" + U() + ")"), el("span", "small", "● daily · line = 7-day average"));
+  chart.append(hd, lineChart(ds.map(d => ({ label: shortDate(d), v: disp(ents[d]) })), { goal: goal != null ? disp(goal) : null, avg: avg.map(disp), label: "Body weight over time with 7-day average" }));
   box.appendChild(chart);
+  if (rate != null) {
+    const pct = Math.abs(rate) / nowAvg * 100;
+    if (pct > 1) { const a = el("div", "alert"); a.append(el("b", null, "Fast pace"), el("span", null, "You're changing by more than 1% of your body weight per week. A slower pace is easier to sustain and helps keep muscle.")); box.appendChild(a); }
+    else if (pct >= 0.25) { const a = el("div", "alert okay"); a.append(el("b", null, "Steady pace"), el("span", null, "About " + trim(pct) + "% of your body weight per week. Around 0.5–1% a week is a sustainable rate for most people.")); box.appendChild(a); }
+  }
   const rows = el("div", "rows");
   ds.slice().reverse().slice(0, 10).forEach(d => {
     const r = el("div", "rowi"), del = el("button", null, "Delete");
@@ -370,6 +555,12 @@ function saveWeighIn() {
 function renderSettings() {
   $("restOn").checked = !!prefs.restOn;
   $("restSecLbl").textContent = fmtSec(prefs.restSec);
+  $("repMinLbl").textContent = prefs.repMin + " min"; $("repMaxLbl").textContent = prefs.repMax + " max";
+  $("repHelp").textContent = "When every working set reaches " + prefs.repMax + " reps, the app suggests adding " + trim(wStep()) + U() + ".";
+  $("weekLbl").textContent = String(prefs.weekTarget);
+  $("wuMinLbl").textContent = prefs.wuMin + " min"; $("wuLen").textContent = prefs.wuMin + " min · recommended before lifting";
+  $("commitOn").checked = !!prefs.commit;
+  if (document.activeElement !== $("wuItems")) $("wuItems").value = wuItems().join("\n");
   // workout days
   const dl = $("dayList"); dl.innerHTML = "";
   days.forEach((d, i) => {
@@ -505,10 +696,10 @@ function exportExcel() {
   const wb = XLSX.utils.book_new(), count = {};
   const data = rows.map(s => {
     const k = s.date + "|" + s.day + "|" + s.ex; count[k] = (count[k] || 0) + 1;
-    return { "Date": dt(s.date), "Day": s.day, "Exercise": s.ex, "Set #": count[k], "Weight (kg)": s.w, "Reps": s.r, "Volume (kg)": r1(s.w * s.r), "Notes": s.note || "" };
+    return { "Date": dt(s.date), "Day": s.day, "Exercise": s.ex, "Set #": count[k], "Weight (kg)": s.w, "Reps": s.r, "Volume (kg)": r1(s.w * s.r), "Warm-up": s.wu ? "Yes" : "", "Reps left": s.rir == null ? "" : (s.rir >= 3 ? "3+" : s.rir), "Notes": s.note || "" };
   });
-  const ws = XLSX.utils.json_to_sheet(data.length ? data : [{ "Date": "", "Day": "", "Exercise": "", "Set #": "", "Weight (kg)": "", "Reps": "", "Volume (kg)": "", "Notes": "" }], { cellDates: true, dateNF: "dd-mmm-yy" });
-  ws["!cols"] = [{ wch: 11 }, { wch: 10 }, { wch: 36 }, { wch: 6 }, { wch: 11 }, { wch: 6 }, { wch: 11 }, { wch: 20 }];
+  const ws = XLSX.utils.json_to_sheet(data.length ? data : [{ "Date": "", "Day": "", "Exercise": "", "Set #": "", "Weight (kg)": "", "Reps": "", "Volume (kg)": "", "Warm-up": "", "Reps left": "", "Notes": "" }], { cellDates: true, dateNF: "dd-mmm-yy" });
+  ws["!cols"] = [{ wch: 11 }, { wch: 10 }, { wch: 36 }, { wch: 6 }, { wch: 11 }, { wch: 6 }, { wch: 11 }, { wch: 8 }, { wch: 9 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, ws, "Log");
   if (bds.length) {
     const bws = XLSX.utils.json_to_sheet(bds.map(d => ({ "Date": dt(d), "Body weight (kg)": r1(body.entries[d]) })), { cellDates: true, dateNF: "dd-mmm-yy" });
@@ -555,7 +746,10 @@ export function mergeRows(rows, curSessions, curLists, curDays) {
     if (!(L[d] || []).includes(ex)) L[d] = [...(L[d] || []), ex];
     const s = S[date] || (S[date] = { date, sets: [] });
     const [y, mo, dd] = date.split("-").map(Number);
-    s.sets.push({ day: d, ex, w, r: reps, note: String(pick(r, "notes", "note") ?? "").trim(), t: new Date(y, mo - 1, dd, 12).getTime() + (seq++) });
+    const set = { day: d, ex, w, r: reps, note: String(pick(r, "notes", "note") ?? "").trim(), t: new Date(y, mo - 1, dd, 12).getTime() + (seq++) };
+    if (/^y/i.test(String(pick(r, "warmup") ?? ""))) set.wu = true;
+    const rl = String(pick(r, "repsleft") ?? "").trim(); if (rl !== "") { const n = parseInt(rl, 10); if (n >= 0) set.rir = Math.min(3, n); }
+    s.sets.push(set);
     added++;
   });
   return { sessions: S, lists: L, days: D, added, skipped, bad };
@@ -579,9 +773,10 @@ async function importExcel(file) {
     const before = clone(sessions), listsBefore = JSON.stringify([days, lists]);
     const res = mergeRows(rows, sessions, lists, days);
     if (!res.added && !bAdded) { toast(res.skipped ? "Nothing new — all " + res.skipped + " sets are already in your log." : "Couldn't find any sets in that file.", true); return; }
-    sessions = res.sessions; lists = res.lists; days = res.days;
-    Object.keys(sessions).forEach(d => { if (JSON.stringify(sessions[d]) !== JSON.stringify(before[d])) writeSession(d, sessions[d]); });
+    const S = res.sessions; sessions = S; lists = res.lists; days = res.days;
+    const toWrite = Object.keys(S).filter(d => JSON.stringify(S[d]) !== JSON.stringify(before[d]));
     if (JSON.stringify([days, lists]) !== listsBefore) saveLists();
+    toWrite.forEach(d => writeSession(d, S[d]));
     renderAll();
     toast("Imported " + res.added + " sets" + (bAdded ? " and " + bAdded + " weigh-ins" : "") + (res.skipped ? ", skipped " + res.skipped + " you already had" : "") + (res.bad ? ", " + res.bad + " rows unreadable" : "") + ".");
   } catch (e) { toast("Couldn't read that file. Use an .xlsx exported from Gym Log.", true); }
@@ -600,7 +795,7 @@ function applyDocs(docs) {
         days = [...DEFAULT_DAYS];
         const nl = {}; DEFAULT_DAYS.forEach(k => { const arr = Array.isArray(v[k]) ? v[k].filter(x => typeof x === "string") : []; nl[k] = v.full ? arr : [...BASE[k], ...arr.filter(x => !BASE[k].includes(x))]; }); lists = nl;
       }
-    } else if (id === "prefs") prefs = { ...DEFAULT_PREFS, ...v };
+    } else if (id === "prefs") { prefs = { ...DEFAULT_PREFS, ...v }; if (!Array.isArray(prefs.wuItems)) prefs.wuItems = DEFAULT_WU; }
     else if (id === "body") body = { entries: { ...(v.entries || {}) }, ...v, entries: { ...(v.entries || {}) } };
     else if (v.date) next[v.date] = v;
   });
@@ -610,6 +805,8 @@ function applyDocs(docs) {
   // keep any day that has sets but isn't in the list
   allSets().forEach(s => { if (!days.includes(s.day)) { days = [...days, s.day]; lists = { ...lists, [s.day]: lists[s.day] || [] }; } });
   if (!renaming && !adding && !dayEditing) renderAll(); else renderHint();
+  // re-apply the warm-up lock once your settings have loaded
+  if (Number(mem.get("wuEnd") || 0) > Date.now()) { if ($("wuLayer").hidden) showWarmup(); else applyLock(); }
   const n = Object.keys(next).length, b = bodyDates().length;
   $("status").textContent = n + " session" + (n === 1 ? "" : "s") + (b ? " and " + b + " weigh-in" + (b === 1 ? "" : "s") : "") + " saved · private to you";
 }
@@ -618,8 +815,22 @@ function applyDocs(docs) {
 function wire() {
   $("date").value = todayISO();
   document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-  $("ex").onchange = () => { mem.set("ex_" + day, $("ex").value); renderHint(); renderToday(); };
-  $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO(); renderUnits(); renderPane(); };
+  $("ex").onchange = () => { mem.set("ex_" + day, $("ex").value); $("rirBox").hidden = true; renderHint(); renderToday(); renderSuggest(true); };
+  $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO(); renderUnits(); renderPane(); if (tab === "training") renderSuggest(true); };
+  document.querySelectorAll("[data-rir]").forEach(b => b.onclick = () => setRir(Number(b.dataset.rir)));
+  document.querySelectorAll("[data-pview]").forEach(b => b.onclick = () => { mem.set("pView", b.dataset.pview); renderProgress(); });
+  // warm-up
+  $("wuStart").onclick = startWarmup;
+  $("wuSkip").onclick = () => closeWarmup("Warm-up skipped.");
+  $("wuDone").onclick = () => closeWarmup("Warm-up done. Have a good session!");
+  let holdT = null, holdStart = 0;
+  const holdBar = $("wuHold").querySelector("i");
+  const holdStop = () => { clearInterval(holdT); holdT = null; holdBar.style.width = "0"; };
+  const holdGo = e => { e.preventDefault(); holdStart = Date.now(); clearInterval(holdT);
+    holdT = setInterval(() => { const p = Math.min(1, (Date.now() - holdStart) / 3000); holdBar.style.width = (p * 100) + "%"; if (p >= 1) { holdStop(); closeWarmup("Warm-up skipped."); } }, 30); };
+  $("wuHold").addEventListener("pointerdown", holdGo);
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => $("wuHold").addEventListener(ev, holdStop));
+  $("wuHold").addEventListener("contextmenu", e => e.preventDefault());
   document.querySelectorAll("[data-step]").forEach(b => b.onclick = () => {
     const f = $(b.dataset.step), dir = Number(b.dataset.dir), v = parseFloat(String(f.value).replace(",", ".")) || 0;
     const step = b.dataset.step === "w" ? wStep() : 1;
@@ -641,9 +852,19 @@ function wire() {
     const wkg = toKg(parseFloat($("w").value) || 0), bkg = toKg(parseFloat($("bw").value) || 0);
     prefs = { ...prefs, units: b.dataset.unit }; savePrefs();
     $("w").value = trim(disp(wkg)); $("bw").value = trim(disp(bkg));
-    renderUnits(); renderSettings(); renderPane(); toast("Showing weights in " + U() + ".");
+    renderUnits(); renderSettings(); renderPane(); renderSuggest(false); toast("Showing weights in " + U() + ".");
   });
   $("restOn").onchange = () => { prefs = { ...prefs, restOn: $("restOn").checked }; savePrefs(); if (!prefs.restOn) stopRest(); };
+  const prefAdj = (k, d, lo, hi) => { prefs = { ...prefs, [k]: Math.min(hi, Math.max(lo, prefs[k] + d)) }; savePrefs(); renderSettings(); if (tab === "training") renderSuggest(false); };
+  $("repMinDown").onclick = () => prefAdj("repMin", -1, 1, prefs.repMax - 1); $("repMinUp").onclick = () => prefAdj("repMin", 1, 1, prefs.repMax - 1);
+  $("repMaxDown").onclick = () => prefAdj("repMax", -1, prefs.repMin + 1, 50); $("repMaxUp").onclick = () => prefAdj("repMax", 1, prefs.repMin + 1, 50);
+  $("weekDown").onclick = () => prefAdj("weekTarget", -1, 1, 7); $("weekUp").onclick = () => prefAdj("weekTarget", 1, 1, 7);
+  $("wuMinDown").onclick = () => prefAdj("wuMin", -1, 1, 30); $("wuMinUp").onclick = () => prefAdj("wuMin", 1, 1, 30);
+  $("commitOn").onchange = () => { prefs = { ...prefs, commit: $("commitOn").checked }; savePrefs(); };
+  $("wuItemsSave").onclick = () => {
+    const items = $("wuItems").value.split("\n").map(x => x.trim()).filter(Boolean).slice(0, 12);
+    prefs = { ...prefs, wuItems: items.length ? items : DEFAULT_WU }; savePrefs(); $("wuItems").blur(); renderSettings(); toast("Warm-up checklist saved.");
+  };
   const restAdj = d => { prefs = { ...prefs, restSec: Math.min(600, Math.max(15, prefs.restSec + d)) }; $("restSecLbl").textContent = fmtSec(prefs.restSec); savePrefs(); };
   $("restDown").onclick = () => restAdj(-15); $("restUp").onclick = () => restAdj(15);
   $("goalSave").onclick = () => {
@@ -674,7 +895,7 @@ function wire() {
     $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true");
     $("menuOpen").setAttribute("aria-expanded", "false"); $("menuOpen").focus();
   };
-  $("signout").onclick = () => { closeMenu(); stopRest(); be.signOut(); };
+  $("signout").onclick = () => { closeMenu(); stopRest(); mem.set("wuEnd", ""); $("wuLayer").hidden = true; clearInterval(wuTick); applyLock(); be.signOut(); };
   $("menuOpen").onclick = openMenu; $("menuClose").onclick = closeMenu; $("drawerBackdrop").onclick = closeMenu;
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
   // colours
@@ -705,6 +926,7 @@ async function start() {
     if (!u) { uid = null; sessions = {}; days = [...DEFAULT_DAYS]; lists = clone(BASE); prefs = { ...DEFAULT_PREFS }; body = { entries: {} }; show("gate"); return; }
     uid = u.uid; $("who").textContent = "Signed in as " + (u.email || u.name);
     show("main"); renderTabs(); renderAll();
+    if (Number(mem.get("wuEnd") || 0) > Date.now()) showWarmup();
     unsub = be.subscribe(uid, applyDocs, () => { $("status").textContent = "Lost connection to your log. Reopen the app to reconnect."; });
   });
   if (!mock && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
