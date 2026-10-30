@@ -17,7 +17,7 @@ const mem = { get(k) { try { return localStorage.getItem(k); } catch (e) { retur
 const clone = o => JSON.parse(JSON.stringify(o));
 
 let be = null, uid = null, unsub = null;
-let sessions = {}, lists = clone(BASE), day = mem.get("day") || "Push", histDay = null, renaming = null;
+let sessions = {}, lists = clone(BASE), day = mem.get("day") || "Push", histDay = null, renaming = null, removing = null;
 const expanded = new Set();
 
 /* ---------- screens ---------- */
@@ -63,20 +63,38 @@ function renderHistory() {
       const ok = document.createElement("button"); ok.className = "use primary"; ok.textContent = "Save";
       const no = document.createElement("button"); no.className = "use"; no.textContent = "Cancel";
       ok.onclick = () => renameExercise(hd, ex, inp.value);
-      no.onclick = () => { renaming = null; renderHistory(); };
+      no.onclick = () => { renaming = null; removing = null; renderHistory(); };
       inp.onkeydown = e => { if (e.key === "Enter") ok.click(); if (e.key === "Escape") no.click(); };
       head.append(inp, ok, no);
-      setTimeout(() => { inp.focus(); inp.select(); }, 0);
+      card.appendChild(head);
+      const nSets = all.filter(s => s.ex === ex && s.day === hd).length;
+      const zone = document.createElement("div"); zone.className = "remove-zone";
+      if (removing === hd + "|" + ex) {
+        const msg = document.createElement("p"); msg.className = "small";
+        msg.textContent = nSets ? "Remove " + ex + " and its " + nSets + " logged set" + (nSets > 1 ? "s" : "") + "? This can't be undone." : "Remove " + ex + " from your " + hd + " list?";
+        const yes = document.createElement("button"); yes.className = "use danger"; yes.textContent = nSets ? "Remove exercise and sets" : "Remove exercise";
+        const keep = document.createElement("button"); keep.className = "use"; keep.textContent = "Keep it";
+        yes.onclick = () => removeExercise(hd, ex);
+        keep.onclick = () => { removing = null; renderHistory(); };
+        const row = document.createElement("div"); row.className = "btns"; row.append(yes, keep);
+        zone.append(msg, row);
+      } else {
+        const link = document.createElement("button"); link.className = "more danger-link"; link.textContent = "Remove exercise…";
+        link.onclick = () => { removing = hd + "|" + ex; renderHistory(); };
+        zone.appendChild(link);
+        setTimeout(() => { inp.focus(); inp.select(); }, 0);
+      }
+      card.appendChild(zone);
     } else {
       const h = document.createElement("h3"); h.textContent = ex;
       const btns = document.createElement("div"); btns.className = "btns";
       const ren = document.createElement("button"); ren.className = "use"; ren.textContent = "Rename";
-      ren.onclick = () => { renaming = hd + "|" + ex; renderHistory(); };
+      ren.onclick = () => { renaming = hd + "|" + ex; removing = null; renderHistory(); };
       const use = document.createElement("button"); use.className = "use"; use.textContent = "Log this";
       use.onclick = () => pickExercise(hd, ex, dates.length ? byDate[dates[0]].sort((a, b) => a.t - b.t).slice(-1)[0] : null);
       btns.append(ren, use); head.append(h, btns);
+      card.appendChild(head);
     }
-    card.appendChild(head);
     if (!dates.length) { const n = document.createElement("div"); n.className = "none"; n.textContent = "No sets logged yet."; card.appendChild(n); }
     (expanded.has(ex) ? dates : dates.slice(0, 3)).forEach((d, idx) => {
       const row = document.createElement("div"); row.className = "sess" + (idx === 0 ? " latest" : "");
@@ -147,6 +165,22 @@ function removeSet(date, i) {
   if (next.sets.length) sessions[date] = next; else delete sessions[date];
   renderHistory(); renderHint();
   writeSession(date, next); toast("Set deleted." + offlineNote());
+}
+function removeExercise(d, ex) {
+  lists = { ...lists, [d]: (lists[d] || []).filter(n => n !== ex) };
+  const changed = [];
+  Object.values(sessions).forEach(s => {
+    if ((s.sets || []).some(x => x.ex === ex && x.day === d)) {
+      const next = { date: s.date, sets: s.sets.filter(x => !(x.ex === ex && x.day === d)) };
+      if (next.sets.length) sessions[s.date] = next; else delete sessions[s.date];
+      changed.push(next);
+    }
+  });
+  if (mem.get("ex_" + d) === ex) mem.set("ex_" + d, "");
+  expanded.delete(ex); renaming = null; removing = null;
+  renderSelect(); renderHistory();
+  saveLists(); changed.forEach(s => writeSession(s.date, s));
+  toast("Removed " + ex + "." + offlineNote());
 }
 function renameExercise(d, oldName, newName) {
   newName = newName.trim();
