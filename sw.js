@@ -1,6 +1,6 @@
 // Offline support: keeps the app's own files and libraries cached so it opens at the gym with no signal.
 // Your workout data is cached separately by Firebase and syncs when you're back online.
-const CACHE = "gymlog-v1";
+const CACHE = "gymlog-v2";
 const SHELL = ["./", "index.html", "app.js", "backend.js", "firebase-config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png"];
 const LIB_HOSTS = ["www.gstatic.com", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com"];
@@ -21,7 +21,7 @@ self.addEventListener("fetch", e => {
   if (!own && !lib) return; // never touch sign-in or database traffic
   if (own) {
     // Network first so updates arrive; fall back to cache offline.
-    e.respondWith(fetch(req).then(res => {
+    e.respondWith(fetch(req, { cache: "no-cache" }).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match("index.html"))));
