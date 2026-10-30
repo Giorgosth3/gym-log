@@ -9,7 +9,13 @@
 <meta name="theme-color" content="#121518" media="(prefers-color-scheme: dark)">
 <script>
   // Apply the saved colour choice before the page draws, so it never flashes the wrong colours.
-  try { var t = localStorage.getItem("theme"); if (t && t !== "auto") document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+  try {
+    var t = localStorage.getItem("theme"), r = document.documentElement;
+    if (t && t.indexOf("custom:") === 0) {
+      var v = JSON.parse(localStorage.getItem("themeVars") || "null");
+      if (v) { r.setAttribute("data-theme", "custom"); for (var k in v) r.style.setProperty(k, v[k]); }
+    } else if (t && t !== "auto") r.setAttribute("data-theme", t);
+  } catch (e) {}
 </script>
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="manifest.webmanifest">
@@ -55,6 +61,16 @@
 .theme-grid button{min-width:0;font:600 .9rem var(--body);padding:9px 4px;border-radius:999px;
   border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer}
 .theme-grid button[aria-pressed="true"]{background:var(--pressed);color:var(--pressed-ink);border-color:var(--pressed)}
+.theme-grid button.custom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-width:2px}
+.theme-grid button.custom[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:2px}
+.theme-grid button.newth{border-style:dashed;background:transparent}
+.themetools{display:flex;gap:6px;flex-wrap:wrap}
+.themetools:empty{display:none}
+.themeedit{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.themeedit .lbl{margin-bottom:0}
+.colrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.95rem}
+.colrow input[type=color]{width:56px;height:36px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--bg);cursor:pointer}
+#thWarn:empty{display:none}#thWarn{color:var(--danger)}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;
@@ -431,10 +447,17 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
 
       <section class="drawer-sec">
         <span class="lbl" id="themeLbl">Colours</span>
-        <div class="theme-grid" role="group" aria-labelledby="themeLbl">
-          <button data-theme-pick="auto">Auto</button><button data-theme-pick="light">Light</button>
-          <button data-theme-pick="dark">Dark</button><button data-theme-pick="ael">AEL Blue</button>
-          <button data-theme-pick="ael-yellow">AEL Yellow</button><button data-theme-pick="ael-soft">AEL Soft</button>
+        <div class="theme-grid" role="group" aria-labelledby="themeLbl" id="themeGrid"></div>
+        <div class="themetools" id="themeTools"></div>
+        <div class="themeedit" id="themeEdit" hidden>
+          <label class="lbl" for="thName">Theme name</label>
+          <input type="text" id="thName" maxlength="20" placeholder="e.g. Night mode">
+          <div class="colrow"><label for="thBg">Background</label><input type="color" id="thBg"></div>
+          <div class="colrow"><label for="thSurface">Panels and boxes</label><input type="color" id="thSurface"></div>
+          <div class="colrow"><label for="thInk">Text</label><input type="color" id="thInk"></div>
+          <div class="colrow"><label for="thAccent">Buttons and highlights</label><input type="color" id="thAccent"></div>
+          <span class="small" id="thWarn" role="status"></span>
+          <div class="btns"><button class="use primary" id="thSave">Save theme</button><button class="use" id="thCancel">Cancel</button></div>
         </div>
       </section>
 

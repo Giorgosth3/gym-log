@@ -610,6 +610,92 @@ function removeDay(d) {
   saveLists(); renderAll(); toast("Removed " + d + "." + offlineNote());
 }
 
+/* ---------- colours: built-in and your own themes ---------- */
+const BUILTIN = [["auto", "Auto"], ["light", "Light"], ["dark", "Dark"], ["ael", "AEL Blue"], ["ael-yellow", "AEL Yellow"], ["ael-soft", "AEL Soft"]];
+const VAR_KEYS = ["--bg", "--surface", "--ink", "--muted", "--line", "--accent", "--accent-ink", "--ok", "--chip", "--danger", "--warn", "--pressed", "--pressed-ink", "color-scheme"];
+let themeEditing = null, themeArmed = null;
+const hexRgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgbHex = c => "#" + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
+const mix = (a, b, t) => { const x = hexRgb(a), y = hexRgb(b); return rgbHex(x.map((v, i) => v + (y[i] - v) * t)); };
+const lum = h => { const [r, g, b] = hexRgb(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * r + .7152 * g + .0722 * b; };
+const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+// Four picked colours become the full palette.
+function themeVars(t) {
+  const dark = lum(t.bg) < 0.3, inkOnAccent = contrast("#ffffff", t.accent) >= contrast("#111111", t.accent) ? "#ffffff" : "#111111";
+  return {
+    "--bg": t.bg, "--surface": t.surface, "--ink": t.ink,
+    "--muted": mix(t.ink, t.bg, 0.4), "--line": mix(t.ink, t.surface, 0.82), "--chip": mix(t.ink, t.surface, 0.9),
+    "--accent": t.accent, "--accent-ink": inkOnAccent,
+    "--ok": dark ? "#3fc27a" : "#1f8a4c", "--danger": dark ? "#e5484d" : "#c62828", "--warn": dark ? "#f5b041" : "#b26a00",
+    "--pressed": t.accent, "--pressed-ink": inkOnAccent, "color-scheme": dark ? "dark" : "light"
+  };
+}
+function customThemes() { return Array.isArray(prefs.customThemes) ? prefs.customThemes : []; }
+function paintTheme(previewVars) {
+  const r = document.documentElement, t = mem.get("theme") || "auto";
+  VAR_KEYS.forEach(k => r.style.removeProperty(k));
+  let vars = previewVars || null;
+  if (!vars && t.startsWith("custom:")) {
+    const th = customThemes().find(x => "custom:" + x.id === t);
+    if (th) vars = themeVars(th); else { try { vars = JSON.parse(mem.get("themeVars") || "null"); } catch (e) {} }
+  }
+  if (vars) { r.setAttribute("data-theme", "custom"); Object.entries(vars).forEach(([k, v]) => r.style.setProperty(k, v)); if (!previewVars) mem.set("themeVars", JSON.stringify(vars)); }
+  else if (t === "auto" || t.startsWith("custom:")) r.removeAttribute("data-theme"); else r.setAttribute("data-theme", t);
+  const bg = getComputedStyle(r).getPropertyValue("--bg").trim();
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => { m.content = (t === "auto" && !vars) ? (m.media.includes("dark") ? "#121518" : "#f7f5f2") : bg; });
+}
+function pickTheme(id) { mem.set("theme", id); themeArmed = null; paintTheme(); renderThemes(); }
+function renderThemes() {
+  const grid = $("themeGrid"), cur = mem.get("theme") || "auto"; grid.innerHTML = "";
+  BUILTIN.forEach(([id, n]) => { const b = el("button", null, n); b.setAttribute("aria-pressed", String(cur === id)); b.onclick = () => pickTheme(id); grid.appendChild(b); });
+  customThemes().forEach(th => {
+    const b = el("button", "custom", th.name), id = "custom:" + th.id;
+    b.style.background = th.bg; b.style.color = th.ink; b.style.borderColor = th.accent;
+    b.setAttribute("aria-pressed", String(cur === id)); b.setAttribute("aria-label", th.name + " (your theme)");
+    b.onclick = () => pickTheme(id); grid.appendChild(b);
+  });
+  const nb = el("button", "newth", "+ New theme"); nb.onclick = () => openThemeEdit(null); grid.appendChild(nb);
+  // edit / delete for the selected custom theme
+  const tools = $("themeTools"); tools.innerHTML = "";
+  const sel = customThemes().find(x => "custom:" + x.id === cur);
+  if (sel && !themeEditing) {
+    if (themeArmed === sel.id) {
+      tools.append(el("span", "small warn", "Delete " + sel.name + "?"));
+      const no = el("button", "use", "Cancel"), yes = el("button", "use danger", "Delete");
+      no.onclick = () => { themeArmed = null; renderThemes(); };
+      yes.onclick = () => { prefs = { ...prefs, customThemes: customThemes().filter(x => x.id !== sel.id) }; savePrefs(); themeArmed = null; mem.set("theme", "auto"); paintTheme(); renderThemes(); toast("Deleted " + sel.name + "."); };
+      tools.append(no, yes);
+    } else {
+      const ed = el("button", "use", "Edit " + sel.name), del = el("button", "use", "Delete");
+      ed.onclick = () => openThemeEdit(sel); del.onclick = () => { themeArmed = sel.id; renderThemes(); };
+      tools.append(ed, del);
+    }
+  }
+}
+function openThemeEdit(th) {
+  const cs = getComputedStyle(document.documentElement), get = k => { const v = cs.getPropertyValue(k).trim(); return /^#[0-9a-f]{6}$/i.test(v) ? v : null; };
+  const base = th || { name: "", bg: get("--bg") || "#121518", surface: get("--surface") || "#1b2026", ink: get("--ink") || "#eef1f4", accent: get("--accent") || "#ff6a33" };
+  themeEditing = th ? th.id : "new";
+  $("thName").value = th ? th.name : "My theme " + (customThemes().length + 1);
+  $("thBg").value = base.bg; $("thSurface").value = base.surface; $("thInk").value = base.ink; $("thAccent").value = base.accent;
+  $("themeEdit").hidden = false; $("themeTools").innerHTML = ""; previewThemeEdit(); $("thName").focus();
+}
+function editValues() { return { bg: $("thBg").value, surface: $("thSurface").value, ink: $("thInk").value, accent: $("thAccent").value }; }
+function previewThemeEdit() {
+  const v = editValues(); paintTheme(themeVars(v));
+  const c = contrast(v.ink, v.bg), c2 = contrast(v.ink, v.surface);
+  $("thWarn").textContent = Math.min(c, c2) < 4.5 ? "Text may be hard to read on this background. Try a lighter or darker text colour." : "";
+}
+function saveThemeEdit() {
+  const name = $("thName").value.trim() || "My theme", v = editValues();
+  let list = customThemes(), id = themeEditing;
+  if (id === "new") { id = Date.now().toString(36); list = [...list, { id, name, ...v }]; }
+  else list = list.map(x => x.id === id ? { ...x, name, ...v } : x);
+  prefs = { ...prefs, customThemes: list }; savePrefs();
+  themeEditing = null; $("themeEdit").hidden = true;
+  mem.set("theme", "custom:" + id); paintTheme(); renderThemes(); toast("Saved " + name + ".");
+}
+
 /* ---------- writes (local first; Firestore syncs in the background) ---------- */
 function writeSession(date, data) {
   const p = data.sets.length ? be.set(uid, "s_" + date, data) : be.del(uid, "s_" + date);
@@ -782,7 +868,7 @@ function applyDocs(docs) {
         days = [...DEFAULT_DAYS];
         const nl = {}; DEFAULT_DAYS.forEach(k => { const arr = Array.isArray(v[k]) ? v[k].filter(x => typeof x === "string") : []; nl[k] = v.full ? arr : [...BASE[k], ...arr.filter(x => !BASE[k].includes(x))]; }); lists = nl;
       }
-    } else if (id === "prefs") { prefs = { ...DEFAULT_PREFS, ...v }; if (!Array.isArray(prefs.wuItems)) prefs.wuItems = DEFAULT_WU; }
+    } else if (id === "prefs") { prefs = { ...DEFAULT_PREFS, ...v }; if (!Array.isArray(prefs.wuItems)) prefs.wuItems = DEFAULT_WU; if (!Array.isArray(prefs.customThemes)) prefs.customThemes = []; }
     else if (id === "body") body = { entries: { ...(v.entries || {}) }, ...v, entries: { ...(v.entries || {}) } };
     else if (v.date) next[v.date] = v;
   });
@@ -792,6 +878,7 @@ function applyDocs(docs) {
   // keep any day that has sets but isn't in the list
   allSets().forEach(s => { if (!days.includes(s.day)) { days = [...days, s.day]; lists = { ...lists, [s.day]: lists[s.day] || [] }; } });
   if (!renaming && !adding && !dayEditing) renderAll(); else renderHint();
+  if (!themeEditing) { paintTheme(); renderThemes(); }
   // re-apply the warm-up lock once your settings have loaded
   if (Number(mem.get("wuEnd") || 0) > Date.now()) { if ($("wuLayer").hidden) showWarmup(); else applyLock(); }
   const n = Object.keys(next).length, b = bodyDates().length;
@@ -878,6 +965,7 @@ function wire() {
   const closeMenu = () => {
     if (!$("drawer").classList.contains("open")) return;
     dayEditing = null;
+    if (themeEditing) { themeEditing = null; $("themeEdit").hidden = true; paintTheme(); renderThemes(); }
     $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true");
     $("menuOpen").setAttribute("aria-expanded", "false"); $("menuOpen").focus();
   };
@@ -885,15 +973,10 @@ function wire() {
   $("menuOpen").onclick = openMenu; $("menuClose").onclick = closeMenu; $("drawerBackdrop").onclick = closeMenu;
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
   // colours
-  const paintTheme = () => {
-    const t = mem.get("theme") || "auto";
-    if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
-    document.querySelectorAll("[data-theme-pick]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themePick === t));
-    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-    document.querySelectorAll('meta[name="theme-color"]').forEach(m => { if (t === "auto") m.content = m.media.includes("dark") ? "#121518" : "#f7f5f2"; else m.content = bg; });
-  };
-  document.querySelectorAll("[data-theme-pick]").forEach(b => b.onclick = () => { mem.set("theme", b.dataset.themePick); paintTheme(); });
-  paintTheme();
+  $("thSave").onclick = saveThemeEdit;
+  $("thCancel").onclick = () => { themeEditing = null; $("themeEdit").hidden = true; paintTheme(); renderThemes(); };
+  ["thBg", "thSurface", "thInk", "thAccent"].forEach(id => $(id).addEventListener("input", previewThemeEdit));
+  paintTheme(); renderThemes();
   if (Number(mem.get("restEnd") || 0) > Date.now()) runRest();
 }
 
