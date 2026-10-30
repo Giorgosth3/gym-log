@@ -98,7 +98,7 @@ h1{font-family:var(--display);font-weight:700;font-size:2rem;letter-spacing:.02e
 .lbl{font:600 .75rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
 select,input[type=text],input[type=date]{width:100%;font:500 1.05rem var(--body);padding:12px;border-radius:10px;
   border:1px solid var(--line);background:var(--bg);color:var(--ink)}
-#date{width:auto;font:500 .9rem var(--num);padding:6px 8px}
+
 .hint{font-size:.85rem;color:var(--muted);min-height:1.2em}
 .hint b{font-family:var(--num);font-weight:500;color:var(--ink)}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -307,6 +307,50 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
 .small.center{text-align:center}
 .tabbar button:disabled{opacity:.35;cursor:not-allowed}
 .icon-btn:disabled{opacity:.35}
+
+/* ---- training: exercise buttons, pill timer, screen-on ---- */
+.exgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.exb{display:flex;flex-direction:column;justify-content:space-between;gap:4px;min-height:60px;text-align:left;padding:10px 11px;border-radius:12px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .92rem/1.2 var(--body);cursor:pointer;min-width:0;overflow-wrap:anywhere}
+.exb small{font:500 .75rem var(--num);color:var(--muted)}
+.exb.done small{color:var(--ok)}
+.exb[aria-pressed="true"]{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface));padding:9px 10px}
+.exb.add{border-style:dashed;background:transparent;color:var(--muted);justify-content:center}
+#logCard{scroll-margin-top:170px;scroll-margin-bottom:96px}
+.cardhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.cardhead b{font:700 1.15rem var(--body);min-width:0;overflow-wrap:anywhere}
+button.chip.copy{border:1px solid transparent;background:var(--chip);color:var(--ink);cursor:pointer;font:600 .85rem var(--num);padding:4px 9px;border-radius:7px}
+button.chip.copy.copied{border-color:var(--accent)}
+.hright{display:flex;align-items:center;gap:6px;min-width:0}
+.timerwrap{position:relative}
+.timerpill{display:flex;align-items:center;gap:5px;font:700 .9rem var(--num);padding:7px 10px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink);cursor:pointer;font-variant-numeric:tabular-nums}
+.timerpill svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.timerpill.done{background:var(--ok);color:#fff}
+.timermenu{position:absolute;right:0;top:calc(100% + 6px);z-index:25;display:flex;gap:6px;padding:8px;border-radius:12px;border:1px solid var(--line);background:var(--surface);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.awake{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted);margin:-4px 0 -6px}
+.awake i{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block}
+.datewrap{position:relative;display:flex;align-items:center;gap:6px;font:600 .85rem var(--num);padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap}
+.datewrap svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.datewrap input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;padding:0;border:0}
+.datewrap:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+body.resting .brand img{display:none}
+.topbar h1{white-space:nowrap}
+@media (max-width:380px){.topbar h1{font-size:1.45rem}.brand{gap:8px}.hright{gap:4px}}
+/* ---- settings groups ---- */
+.grp{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.grp > summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px;cursor:pointer;font:600 1rem var(--body);color:var(--ink)}
+.grp > summary::-webkit-details-marker{display:none}
+.gic{width:30px;height:30px;border-radius:8px;background:var(--chip);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.gic svg,.grp .chev{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.gt{min-width:0;flex:1 1 auto}
+.gsum{margin-left:auto;font:500 .8rem var(--body);color:var(--muted);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%;flex-shrink:0}
+.grp .chev{color:var(--muted);flex-shrink:0;transition:transform .15s ease}
+.grp[open] .chev{transform:rotate(90deg)}
+.gb{border-top:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:10px}
+.gb .lbl{margin-bottom:0}
+details.inner summary{cursor:pointer;color:var(--muted);font-size:.9rem;padding:4px 0}
+.danger-ghost{color:var(--danger)}
+.drawer-panel{gap:10px}
 </style>
 </head>
 <body>
@@ -333,23 +377,25 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
         </button>
         <img src="icons/icon-192.png" alt=""><h1>Gym Log</h1>
       </div>
-      <input type="date" id="date" aria-label="Date">
+      <div class="hright">
+        <div class="timerwrap">
+          <button class="timerpill" id="timerPill" hidden aria-haspopup="true" aria-expanded="false" aria-controls="timerMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/></svg><span id="timerTime">1:30</span></button>
+          <div class="timermenu" id="timerMenu" hidden><button class="use" id="restMore">+30s</button><button class="use" id="restSkip">Skip</button></div>
+        </div>
+        <label class="datewrap"><span id="dateLbl">Today</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><input type="date" id="date" aria-label="Date"></label>
+      </div>
     </header>
     <div class="days" role="group" aria-label="Workout" id="dayBtns"></div>
   </div>
 
   <!-- TRAINING -->
   <section class="pane" id="pane-training" aria-label="Training">
-    <div class="wucard" id="wuCard">
-      <div><b>Warm-up</b><span class="small" id="wuLen">8 min · recommended before lifting</span></div>
-      <button class="use primary" id="wuStart">Start</button>
-    </div>
-    <div class="card">
-      <div>
-        <label class="lbl" for="ex">Exercise</label>
-        <select id="ex"></select>
-        <div class="hint lastrow" id="hint" style="margin-top:8px"></div>
-      </div>
+    <div class="awake" id="awakeLine" hidden><i></i>Screen stays on while you train</div>
+    <div class="exgrid" id="exGrid" role="group" aria-label="Exercises"></div>
+    <select id="ex" hidden aria-hidden="true" tabindex="-1"></select>
+    <div class="card" id="logCard">
+      <div class="cardhead"><b id="exTitle"></b><span class="lbl" id="setNo"></span></div>
+      <div class="hint lastrow" id="hint"></div>
       <div class="pair">
         <div><label class="lbl" for="w" id="wLbl">Weight (kg)</label>
           <div class="stepper"><button type="button" data-step="w" data-dir="-1" aria-label="Less weight">−</button>
@@ -359,12 +405,8 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
             <input id="r" inputmode="numeric" value="8"><button type="button" data-step="r" data-dir="1" aria-label="More reps">+</button></div></div>
       </div>
       <div><label class="lbl" for="note">Note (optional)</label><input type="text" id="note" placeholder="e.g. seat 5, drop set"></div>
-      <div class="srow"><label for="wuSet">Warm-up set <span class="small">(not counted in PBs or progress)</span></label><span class="switch"><input type="checkbox" id="wuSet"><span></span></span></div>
+      <span class="small" id="filledNote" hidden></span>
       <button class="save" id="save">Save set</button>
-    </div>
-    <div class="rest" id="restBox" hidden>
-      <div><span class="small" id="restLbl">Rest timer</span><b id="restTime">1:30</b></div>
-      <div class="btns"><button class="use" id="restMore">+30s</button><button class="use" id="restSkip">Skip</button></div>
     </div>
     <div id="todayBox" hidden>
       <span class="lbl">Today so far</span>
@@ -408,19 +450,6 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
     <div id="bodyBody"></div>
   </section>
 
-  <div class="wulayer" id="wuLayer" hidden role="dialog" aria-modal="true" aria-labelledby="wuTitle">
-    <div class="wuinner">
-      <span class="lbl" id="wuTitle">Warm-up</span>
-      <div class="ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--chip)" stroke-width="8"/><circle id="wuArc" cx="50" cy="50" r="44" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><b id="wuTime" aria-live="off">8:00</b></div>
-      <span class="small" id="wuOf">of 8:00</span>
-      <div class="olist" id="wuList"></div>
-      <button class="save" id="wuDone" hidden>Start workout</button>
-      <button class="ghost" id="wuSkip">Skip warm-up</button>
-      <button class="hold" id="wuHold" hidden><i></i><span>Hold to skip warm-up</span></button>
-      <span class="small center" id="wuLockMsg" hidden>🔒 Commit mode is on. Your log unlocks when the timer ends. You can turn this off in ☰ Settings.</span>
-    </div>
-  </div>
-
   <div id="toast" role="status" aria-live="polite"></div>
 
   <nav class="tabbar" aria-label="Sections">
@@ -439,72 +468,61 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
         <button class="icon-btn" id="menuClose" aria-label="Close menu">✕</button>
       </div>
 
-      <section class="drawer-sec">
-        <span class="lbl" id="themeLbl">Colours</span>
-        <div class="theme-grid" role="group" aria-labelledby="themeLbl" id="themeGrid"></div>
-        <div class="themetools" id="themeTools"></div>
-        <div class="themeedit" id="themeEdit" hidden>
-          <label class="lbl" for="thName">Theme name</label>
-          <input type="text" id="thName" maxlength="20" placeholder="e.g. Night mode">
-          <div class="colrow"><label for="thBg">Background</label><input type="color" id="thBg"></div>
-          <div class="colrow"><label for="thSurface">Panels and boxes</label><input type="color" id="thSurface"></div>
-          <div class="colrow"><label for="thInk">Text</label><input type="color" id="thInk"></div>
-          <div class="colrow"><label for="thAccent">Buttons and highlights</label><input type="color" id="thAccent"></div>
-          <span class="small" id="thWarn" role="status"></span>
-          <div class="btns"><button class="use primary" id="thSave">Save theme</button><button class="use" id="thCancel">Cancel</button></div>
+      <details class="grp" data-grp="col">
+        <summary><span class="gic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.5-.8 1.5-1.5 0-.9-.7-1.2-.7-2 0-.9.7-1.5 1.6-1.5H17a4 4 0 0 0 4-4c0-5-4-9-9-9z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg></span><span class="gt">Colours</span><span class="gsum" id="sumCol"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+        <div class="gb">
+          <div class="theme-grid" role="group" aria-label="Colours" id="themeGrid"></div>
+          <div class="themetools" id="themeTools"></div>
+          <div class="themeedit" id="themeEdit" hidden>
+            <label class="lbl" for="thName">Theme name</label>
+            <input type="text" id="thName" maxlength="20" placeholder="e.g. Night mode">
+            <div class="colrow"><label for="thBg">Background</label><input type="color" id="thBg"></div>
+            <div class="colrow"><label for="thSurface">Panels and boxes</label><input type="color" id="thSurface"></div>
+            <div class="colrow"><label for="thInk">Text</label><input type="color" id="thInk"></div>
+            <div class="colrow"><label for="thAccent">Buttons and highlights</label><input type="color" id="thAccent"></div>
+            <span class="small" id="thWarn" role="status"></span>
+            <div class="btns"><button class="use primary" id="thSave">Save theme</button><button class="use" id="thCancel">Cancel</button></div>
+          </div>
         </div>
-      </section>
-
-      <section class="drawer-sec">
-        <span class="lbl" id="unitLbl">Units</span>
-        <div class="seg" role="group" aria-labelledby="unitLbl"><button data-unit="kg">kg</button><button data-unit="lbs">lbs</button></div>
-      </section>
-
-      <section class="drawer-sec">
-        <span class="lbl">Rest timer</span>
-        <div class="srow"><label for="restOn">Start after each set</label><span class="switch"><input type="checkbox" id="restOn"><span></span></span></div>
-        <div class="srow"><span>Rest time</span><div class="mini"><button id="restDown" aria-label="Shorter rest">−</button><span id="restSecLbl">1:30</span><button id="restUp" aria-label="Longer rest">+</button></div></div>
-      </section>
-
-      <section class="drawer-sec">
-        <span class="lbl">Training targets</span>
-        <div class="srow"><span>Sessions per week</span><div class="mini"><button id="weekDown" aria-label="Fewer sessions">−</button><span id="weekLbl">4</span><button id="weekUp" aria-label="More sessions">+</button></div></div>
-      </section>
-
-      <section class="drawer-sec">
-        <span class="lbl">Warm-up</span>
-        <div class="srow"><span>Length</span><div class="mini"><button id="wuMinDown" aria-label="Shorter warm-up">−</button><span id="wuMinLbl">8 min</span><button id="wuMinUp" aria-label="Longer warm-up">+</button></div></div>
-        <div class="srow"><label for="commitOn">Commit mode <span class="small">(lock the app until the warm-up ends)</span></label><span class="switch"><input type="checkbox" id="commitOn"><span></span></span></div>
-        <label class="small" for="wuItems">Checklist, one item per line</label>
-        <textarea id="wuItems" rows="4"></textarea>
-        <button class="use" id="wuItemsSave" style="align-self:flex-start">Save checklist</button>
-      </section>
-
-
-      <section class="drawer-sec">
-        <span class="lbl">Workout days</span>
-        <div class="olist" id="dayList"></div>
-        <div class="addrow" style="margin-top:0"><input type="text" id="newDay" placeholder="New day, e.g. Arms" aria-label="New workout day name"><button class="ghost" id="addDay" style="padding:10px 14px">Add</button></div>
-      </section>
-
-      <section class="drawer-sec">
-        <span class="lbl" id="orderLbl">Exercise order</span>
-        <div class="olist" id="exOrder"></div>
-      </section>
-
-      <section class="drawer-sec">
-        <span class="lbl">Your data</span>
-        <button class="ghost" id="export">Export to Excel</button>
-        <details><summary>Import sets from an Excel file</summary>
-          <p class="small">Use a file exported from Gym Log (columns: Date, Day, Exercise, Weight (kg), Reps, Notes). Sets you already have are skipped.</p>
-          <input type="file" id="importFile" accept=".xlsx,.xls,.csv" aria-label="Excel file to import">
-        </details>
-        <div class="status" id="status"></div>
-      </section>
-
-      <section class="drawer-sec account">
-        <span id="who"></span><button class="link" id="signout">Sign out</button>
-      </section>
+      </details>
+      <details class="grp" data-grp="tr">
+        <summary><span class="gic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/></svg></span><span class="gt">Training</span><span class="gsum" id="sumTr"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+        <div class="gb">
+          <div class="srow"><span id="unitLbl">Units</span><div class="seg" role="group" aria-labelledby="unitLbl" style="width:130px"><button data-unit="kg">kg</button><button data-unit="lbs">lbs</button></div></div>
+          <div class="srow"><label for="restOn">Rest timer after each set</label><span class="switch"><input type="checkbox" id="restOn"><span></span></span></div>
+          <div class="srow"><span>Rest time</span><div class="mini"><button id="restDown" aria-label="Shorter rest">−</button><span id="restSecLbl">1:30</span><button id="restUp" aria-label="Longer rest">+</button></div></div>
+          <div class="srow"><label for="awakeOn">Keep screen on <span class="small">(while on Training)</span></label><span class="switch"><input type="checkbox" id="awakeOn"><span></span></span></div>
+          <div class="srow"><span>Sessions per week</span><div class="mini"><button id="weekDown" aria-label="Fewer sessions">−</button><span id="weekLbl">4</span><button id="weekUp" aria-label="More sessions">+</button></div></div>
+        </div>
+      </details>
+      <details class="grp" data-grp="days">
+        <summary><span class="gic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></span><span class="gt">Workout days &amp; exercises</span><span class="gsum" id="sumDays"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+        <div class="gb">
+          <span class="lbl">Workout days</span>
+          <div class="olist" id="dayList"></div>
+          <div class="addrow" style="margin-top:0"><input type="text" id="newDay" placeholder="New day, e.g. Arms" aria-label="New workout day name"><button class="ghost" id="addDay" style="padding:10px 14px">Add</button></div>
+          <span class="lbl" id="orderLbl">Exercise order</span>
+          <div class="olist" id="exOrder"></div>
+        </div>
+      </details>
+      <details class="grp" data-grp="data">
+        <summary><span class="gic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></span><span class="gt">Your data</span><span class="gsum" id="sumData"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+        <div class="gb">
+          <button class="ghost" id="export">Export to Excel</button>
+          <details class="inner"><summary>Import sets from an Excel file</summary>
+            <p class="small">Use a file exported from Gym Log (columns: Date, Day, Exercise, Weight (kg), Reps, Notes). Sets you already have are skipped.</p>
+            <input type="file" id="importFile" accept=".xlsx,.xls,.csv" aria-label="Excel file to import">
+          </details>
+          <div class="status" id="status"></div>
+        </div>
+      </details>
+      <details class="grp" data-grp="acc">
+        <summary><span class="gic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span><span class="gt">Account</span><span class="gsum" id="sumAcc"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+        <div class="gb">
+          <span id="who" class="small"></span>
+          <button class="ghost danger-ghost" id="signout">Sign out</button>
+        </div>
+      </details>
     </aside>
   </div>
 </div>

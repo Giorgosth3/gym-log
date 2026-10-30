@@ -9,8 +9,7 @@ const BASE = {
   Legs: ["Hack squat", "Hamstring curls", "Leg extensions (aristera)", "Calves"],
   Shoulders: ["Shoulder press", "Lateral raises machine", "Face pulls"]
 };
-const DEFAULT_WU = ["3 min easy cardio (bike or rower)", "Arm circles and band pull-aparts × 15", "10 bodyweight reps of your first movement", "1–2 light sets of your first exercise"];
-const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null, repMin: 8, repMax: 12, weekTarget: 4, wuMin: 8, commit: false, wuItems: DEFAULT_WU };
+const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null, weekTarget: 4, keepAwake: true };
 const KG_LB = 2.20462;
 
 /* ---------- helpers ---------- */
@@ -64,7 +63,7 @@ function renderTabs() {
   document.querySelectorAll("[data-tab]").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   $("dayBtns").hidden = !(tab === "training" || tab === "history");
 }
-function setTab(t) { tab = t; mem.set("tab", t); adding = null; renaming = null; armed = null; selSet = null; renderTabs(); renderPane(); window.scrollTo(0, 0); }
+function setTab(t) { tab = t; mem.set("tab", t); if (t !== "history") adding = null; renaming = null; armed = null; selSet = null; renderTabs(); renderPane(); window.scrollTo(0, 0); syncWake(); }
 function renderDayBtns() {
   if (!days.includes(day)) day = days[0] || "";
   const box = $("dayBtns"); box.innerHTML = "";
@@ -75,7 +74,7 @@ function renderDayBtns() {
   });
 }
 function renderPane() {
-  if (tab === "training") { renderHint(); renderToday(); }
+  if (tab === "training") renderExercise(false);
   if (tab === "history") renderHistory();
   if (tab === "progress") renderProgress();
   if (tab === "body") renderBody();
@@ -88,7 +87,54 @@ function renderSelect() {
   sel.innerHTML = "";
   namesFor(day).forEach(n => sel.appendChild(el("option", null, n)));
   if (keep && namesFor(day).includes(keep)) sel.value = keep;
-  renderHint(); renderToday();
+  renderExercise(true);
+}
+// Everything on the logging card for the chosen exercise. prefill=true fills weight/reps.
+function renderExercise(prefill) {
+  renderExGrid(); renderHint(); renderToday();
+  const ex = $("ex").value; $("logCard").hidden = !ex; $("exTitle").textContent = ex;
+  const done = todaySets(ex).length; $("setNo").textContent = ex ? "Set " + (done + 1) : "";
+  if (prefill) prefillSet();
+}
+function todaySets(ex) { const cur = $("date").value; return working(((sessions[cur] || {}).sets || []).filter(s => s.ex === ex && s.day === day)).sort((a, b) => a.t - b.t); }
+function lastSession(ex) {
+  const prev = working(allSets().filter(s => s.ex === ex && s.date < $("date").value));
+  if (!prev.length) return null;
+  const d = prev.reduce((a, s) => s.date > a ? s.date : a, "");
+  return { date: d, sets: prev.filter(s => s.date === d).sort((a, b) => a.t - b.t) };
+}
+// #1 match set numbers: set N today starts from set N last time (or the last one if you do more sets)
+function prefillSet() {
+  const ex = $("ex").value, note = $("filledNote"); note.hidden = true; if (!ex) return;
+  const n = todaySets(ex).length + 1, last = lastSession(ex);
+  if (last) {
+    const pick = last.sets[n - 1] || last.sets[last.sets.length - 1];
+    $("w").value = trim(disp(pick.w)); $("r").value = String(pick.r);
+    note.textContent = last.sets[n - 1] ? "Filled in from set " + n + " last time. Adjust if needed." : "Filled in from your last set last time. Adjust if needed.";
+    note.hidden = false;
+  } else {
+    const today = todaySets(ex); if (today.length) { const s = today[today.length - 1]; $("w").value = trim(disp(s.w)); $("r").value = String(s.r); }
+  }
+}
+function pickEx(ex) {
+  $("ex").value = ex; mem.set("ex_" + day, ex); renderExercise(true);
+  // bring the logging card (with Save) into view
+  $("logCard").scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
+function renderExGrid() {
+  const grid = $("exGrid"), cur = $("ex").value; grid.innerHTML = "";
+  namesFor(day).forEach(ex => {
+    const b = el("button", "exb"), n = todaySets(ex).length, last = n ? null : lastSession(ex);
+    b.type = "button"; b.setAttribute("aria-pressed", String(ex === cur));
+    if (n) b.classList.add("done");
+    const sub = n ? "✓ " + n + " set" + (n > 1 ? "s" : "") : last ? "Last: " + fmtW(last.sets[last.sets.length - 1].w) + " × " + last.sets[last.sets.length - 1].r : "Not done yet";
+    b.append(el("span", null, ex), el("small", null, sub));
+    b.onclick = () => pickEx(ex);
+    grid.appendChild(b);
+  });
+  const add = el("button", "exb add", "+ Add exercise"); add.type = "button";
+  add.onclick = () => { adding = day; setTab("history"); setTimeout(() => { const i = $("newEx"); if (i) i.scrollIntoView({ block: "center" }); }, 60); };
+  grid.appendChild(add);
 }
 // sets: chips; when `rerender` is given, chips are tappable and tapping one offers "Remove set"
 function chipsInto(box, sets, rerender) {
@@ -117,13 +163,17 @@ function setBar(sets, rerender) {
   return bar;
 }
 function renderHint() {
-  const ex = $("ex").value, cur = $("date").value, h = $("hint"); h.innerHTML = "";
-  const prev = allSets().filter(s => s.ex === ex && s.date < cur).sort((a, b) => a.date < b.date ? 1 : -1);
-  if (!ex) { h.textContent = "Add an exercise in History to start logging."; return; }
-  if (!prev.length) { h.textContent = "No earlier sets for this one yet."; return; }
-  const last = prev[0].date;
-  h.appendChild(el("span", null, "Last time · " + shortDate(last) + ":"));
-  chipsInto(h, prev.filter(s => s.date === last).sort((a, b) => a.t - b.t));
+  const ex = $("ex").value, h = $("hint"); h.innerHTML = "";
+  if (!ex) return;
+  const last = lastSession(ex);
+  if (!last) { h.textContent = "No earlier sets for this one yet."; return; }
+  h.appendChild(el("span", null, "Last time · " + shortDate(last.date) + " (tap to copy):"));
+  last.sets.forEach(s => {
+    const b = el("button", "chip copy", fmtW(s.w) + " × " + s.r); b.type = "button";
+    b.setAttribute("aria-label", "Copy " + fmtW(s.w) + " × " + s.r);
+    b.onclick = () => { $("w").value = trim(disp(s.w)); $("r").value = String(s.r); h.querySelectorAll(".copied").forEach(x => x.classList.remove("copied")); b.classList.add("copied"); $("filledNote").hidden = true; };
+    h.appendChild(b);
+  });
 }
 function renderToday() {
   const ex = $("ex").value, cur = $("date").value;
@@ -133,6 +183,7 @@ function renderToday() {
   const box = $("todayChips"); box.innerHTML = ""; chipsInto(box, sets.map(s => ({ ...s, date: cur })), renderToday);
   const bar = setBar(sets.map(s => ({ ...s, date: cur })), renderToday); if (bar) box.appendChild(bar);
 }
+function renderDateLbl() { const d = $("date").value; $("dateLbl").textContent = d === todayISO() ? "Today" : longDate(d); }
 function renderUnits() {
   $("wLbl").textContent = "Weight (" + U() + ")";
   $("bwLbl").textContent = "Weigh-in · " + longDate($("date").value) + " (" + U() + ")";
@@ -145,87 +196,56 @@ function saveSet() {
   if (!(v >= 0) || !(r > 0)) { toast("Enter a weight and at least 1 rep.", true); return; }
   const date = $("date").value || todayISO(), ex = $("ex").value;
   if (!ex) { toast("Pick an exercise first.", true); return; }
-  const w = toKg(v), wu = $("wuSet").checked, t = Date.now();
+  const w = toKg(v), wu = false, t = Date.now();
   const prevMax = Math.max(-1, ...working(allSets().filter(s => s.ex === ex)).map(s => s.w));
   const s = sessions[date] || { date, sets: [] };
   const set = { day, ex, w, r, note: $("note").value.trim(), t }; if (wu) set.wu = true;
   const next = { date, sets: [...(s.sets || []), set] };
-  sessions[date] = next; renderHint(); renderToday();
+  sessions[date] = next;
   writeSession(date, next);
   const n = working(next.sets.filter(x => x.ex === ex)).length;
   toast(wu ? "Warm-up saved: " + fmtW(w) + " × " + r + offlineNote()
     : (prevMax >= 0 && w > prevMax ? "New personal best! " : "Saved: ") + ex + " set " + n + " — " + fmtW(w) + " × " + r + offlineNote());
   $("note").value = "";
+  renderExercise(true);
   if (prefs.restOn) startRest(prefs.restSec);
 }
 
-/* ---------- warm-up timer (optional commit lock) ---------- */
-let wuTick = null;
-function wuItems() { return (prefs.wuItems && prefs.wuItems.length ? prefs.wuItems : DEFAULT_WU); }
-function startWarmup() {
-  mem.set("wuEnd", String(Date.now() + prefs.wuMin * 60000)); mem.set("wuLen", String(prefs.wuMin * 60)); mem.set("wuDone", "[]");
-  showWarmup();
-}
-function warmLocked() { return prefs.commit && Number(mem.get("wuEnd") || 0) > Date.now(); }
-function applyLock() {
-  const locked = !$("wuLayer").hidden && warmLocked();
-  document.querySelectorAll(".tabbar button").forEach(b => { b.disabled = locked; });
-  $("menuOpen").disabled = locked;
-  $("wuSkip").hidden = locked || !Number(mem.get("wuEnd") || 0); $("wuHold").hidden = !locked; $("wuLockMsg").hidden = !locked;
-}
-function showWarmup() {
-  $("wuLayer").hidden = false; $("wuDone").hidden = true;
-  const total = Number(mem.get("wuLen") || prefs.wuMin * 60);
-  $("wuTitle").textContent = "Warm-up · " + day; $("wuOf").textContent = "of " + fmtSec(total);
-  let done = []; try { done = JSON.parse(mem.get("wuDone") || "[]"); } catch (e) {}
-  const list = $("wuList"); list.innerHTML = "";
-  wuItems().forEach((it, i) => {
-    const b = el("button", "wuitem"); b.setAttribute("aria-pressed", String(done.includes(i)));
-    b.append(el("span", "box"), el("span", null, it));
-    b.onclick = () => { const on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", String(on));
-      done = on ? [...done, i] : done.filter(x => x !== i); mem.set("wuDone", JSON.stringify(done)); };
-    list.appendChild(b);
-  });
-  clearInterval(wuTick);
-  const tick = () => {
-    const left = (Number(mem.get("wuEnd") || 0) - Date.now()) / 1000;
-    if (left <= 0) {
-      clearInterval(wuTick); wuTick = null; mem.set("wuEnd", "");
-      $("wuTime").textContent = "Done"; $("wuArc").setAttribute("stroke-dashoffset", "0");
-      $("wuDone").hidden = false; applyLock();
-      try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch (e) {}
-      return;
-    }
-    $("wuTime").textContent = fmtSec(Math.ceil(left));
-    $("wuArc").setAttribute("stroke-dashoffset", String(276.5 * (1 - left / total)));
-  };
-  tick(); wuTick = setInterval(tick, 250); applyLock();
-}
-function closeWarmup(msg) {
-  clearInterval(wuTick); wuTick = null; mem.set("wuEnd", "");
-  $("wuLayer").hidden = true; applyLock(); setTab("training"); if (msg) toast(msg);
-}
-
-/* ---------- rest timer ---------- */
-let restTick = null;
+/* ---------- rest timer: a pill in the top bar, visible on every tab ---------- */
+let restTick = null, doneTimer = null;
 function startRest(sec) { mem.set("restEnd", String(Date.now() + sec * 1000)); runRest(); }
-function stopRest() { mem.set("restEnd", ""); clearInterval(restTick); restTick = null; $("restBox").hidden = true; }
+function stopRest() {
+  mem.set("restEnd", ""); clearInterval(restTick); restTick = null; clearTimeout(doneTimer);
+  $("timerPill").hidden = true; $("timerPill").classList.remove("done"); closeTimerMenu(); document.body.classList.remove("resting");
+}
+function closeTimerMenu() { $("timerMenu").hidden = true; $("timerPill").setAttribute("aria-expanded", "false"); }
 function runRest() {
-  clearInterval(restTick);
-  const box = $("restBox"); box.classList.remove("done"); $("restLbl").textContent = "Rest timer"; box.hidden = false;
+  clearInterval(restTick); clearTimeout(doneTimer);
+  const pill = $("timerPill"); pill.hidden = false; pill.classList.remove("done"); document.body.classList.add("resting");
   const tick = () => {
     const end = Number(mem.get("restEnd") || 0), left = (end - Date.now()) / 1000;
     if (!end) { stopRest(); return; }
     if (left <= 0) {
-      clearInterval(restTick); restTick = null; mem.set("restEnd", "");
-      box.classList.add("done"); $("restLbl").textContent = "Rest over"; $("restTime").textContent = "Next set!";
+      clearInterval(restTick); restTick = null; mem.set("restEnd", ""); closeTimerMenu();
+      pill.classList.add("done"); $("timerTime").textContent = "Go!"; pill.setAttribute("aria-label", "Rest over");
+      toast("Rest over. Next set!");
       try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch (e) {}
-      setTimeout(() => { if (!mem.get("restEnd")) box.hidden = true; }, 6000);
+      doneTimer = setTimeout(() => { if (!mem.get("restEnd")) { pill.hidden = true; pill.classList.remove("done"); document.body.classList.remove("resting"); } }, 6000);
       return;
     }
-    $("restTime").textContent = fmtSec(Math.ceil(left));
+    $("timerTime").textContent = fmtSec(Math.ceil(left)); pill.setAttribute("aria-label", "Rest timer " + fmtSec(Math.ceil(left)) + ". Tap for options");
   };
   tick(); restTick = setInterval(tick, 250);
+}
+
+/* ---------- keep the screen on while on Training ---------- */
+let wakeLock = null;
+async function syncWake() {
+  const want = prefs.keepAwake !== false && tab === "training" && document.visibilityState === "visible" && !$("main").hidden;
+  if (want && !wakeLock && "wakeLock" in navigator) {
+    try { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; $("awakeLine").hidden = true; }); } catch (e) { wakeLock = null; }
+  } else if (!want && wakeLock) { try { await wakeLock.release(); } catch (e) {} wakeLock = null; }
+  $("awakeLine").hidden = !(want && wakeLock);
 }
 
 /* ---------- history ---------- */
@@ -519,9 +539,9 @@ function renderSettings() {
   $("restOn").checked = !!prefs.restOn;
   $("restSecLbl").textContent = fmtSec(prefs.restSec);
   $("weekLbl").textContent = String(prefs.weekTarget);
-  $("wuMinLbl").textContent = prefs.wuMin + " min"; $("wuLen").textContent = prefs.wuMin + " min · recommended before lifting";
-  $("commitOn").checked = !!prefs.commit;
-  if (document.activeElement !== $("wuItems")) $("wuItems").value = wuItems().join("\n");
+  $("awakeOn").checked = prefs.keepAwake !== false;
+  $("sumTr").textContent = U() + " · rest " + (prefs.restOn ? fmtSec(prefs.restSec) : "off");
+  $("sumDays").textContent = days.length + " day" + (days.length === 1 ? "" : "s");
   // workout days
   const dl = $("dayList"); dl.innerHTML = "";
   days.forEach((d, i) => {
@@ -628,6 +648,8 @@ function renderThemes() {
     b.setAttribute("aria-pressed", String(cur === id)); b.setAttribute("aria-label", th.name + " (your theme)");
     b.onclick = () => pickTheme(id); grid.appendChild(b);
   });
+  const curName = (BUILTIN.find(x => x[0] === cur) || [])[1] || (customThemes().find(x => "custom:" + x.id === cur) || {}).name || "Auto";
+  $("sumCol").textContent = curName;
   const nb = el("button", "newth", "+ New theme"); nb.onclick = () => openThemeEdit(null); grid.appendChild(nb);
   // edit / delete for the selected custom theme
   const tools = $("themeTools"); tools.innerHTML = "";
@@ -652,7 +674,7 @@ function openThemeEdit(th) {
   themeEditing = th ? th.id : "new";
   $("thName").value = th ? th.name : "My theme " + (customThemes().length + 1);
   $("thBg").value = base.bg; $("thSurface").value = base.surface; $("thInk").value = base.ink; $("thAccent").value = base.accent;
-  $("themeEdit").hidden = false; $("themeTools").innerHTML = ""; previewThemeEdit(); $("thName").focus();
+  $("themeEdit").hidden = false; $("themeTools").innerHTML = ""; document.querySelector('[data-grp="col"]').open = true; previewThemeEdit(); $("thName").focus();
 }
 function editValues() { return { bg: $("thBg").value, surface: $("thSurface").value, ink: $("thInk").value, accent: $("thAccent").value }; }
 function previewThemeEdit() {
@@ -842,7 +864,7 @@ function applyDocs(docs) {
         days = [...DEFAULT_DAYS];
         const nl = {}; DEFAULT_DAYS.forEach(k => { const arr = Array.isArray(v[k]) ? v[k].filter(x => typeof x === "string") : []; nl[k] = v.full ? arr : [...BASE[k], ...arr.filter(x => !BASE[k].includes(x))]; }); lists = nl;
       }
-    } else if (id === "prefs") { prefs = { ...DEFAULT_PREFS, ...v }; if (!Array.isArray(prefs.wuItems)) prefs.wuItems = DEFAULT_WU; if (!Array.isArray(prefs.customThemes)) prefs.customThemes = []; }
+    } else if (id === "prefs") { prefs = { ...DEFAULT_PREFS, ...v }; if (!Array.isArray(prefs.customThemes)) prefs.customThemes = []; }
     else if (id === "body") body = { entries: { ...(v.entries || {}) }, ...v, entries: { ...(v.entries || {}) } };
     else if (v.date) next[v.date] = v;
   });
@@ -853,39 +875,37 @@ function applyDocs(docs) {
   allSets().forEach(s => { if (!days.includes(s.day)) { days = [...days, s.day]; lists = { ...lists, [s.day]: lists[s.day] || [] }; } });
   if (!renaming && !adding && !dayEditing) renderAll(); else renderHint();
   if (!themeEditing) { paintTheme(); renderThemes(); }
-  // re-apply the warm-up lock once your settings have loaded
-  if (Number(mem.get("wuEnd") || 0) > Date.now()) { if ($("wuLayer").hidden) showWarmup(); else applyLock(); }
+  syncWake();
   const n = Object.keys(next).length, b = bodyDates().length;
   $("status").textContent = n + " session" + (n === 1 ? "" : "s") + (b ? " and " + b + " weigh-in" + (b === 1 ? "" : "s") : "") + " saved · private to you";
+  $("sumData").textContent = n + " session" + (n === 1 ? "" : "s");
 }
 
 /* ---------- wiring ---------- */
 function wire() {
   $("date").value = todayISO();
   document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-  $("ex").onchange = () => { mem.set("ex_" + day, $("ex").value); renderHint(); renderToday(); };
-  $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO(); renderUnits(); renderPane(); };
+  $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO(); renderDateLbl(); renderUnits(); renderPane(); };
+  renderDateLbl();
   document.querySelectorAll("[data-pview]").forEach(b => b.onclick = () => { mem.set("pView", b.dataset.pview); renderProgress(); });
-  // warm-up
-  $("wuStart").onclick = startWarmup;
-  $("wuSkip").onclick = () => closeWarmup("Warm-up skipped.");
-  $("wuDone").onclick = () => closeWarmup("Warm-up done. Have a good session!");
-  let holdT = null, holdStart = 0;
-  const holdBar = $("wuHold").querySelector("i");
-  const holdStop = () => { clearInterval(holdT); holdT = null; holdBar.style.width = "0"; };
-  const holdGo = e => { e.preventDefault(); holdStart = Date.now(); clearInterval(holdT);
-    holdT = setInterval(() => { const p = Math.min(1, (Date.now() - holdStart) / 3000); holdBar.style.width = (p * 100) + "%"; if (p >= 1) { holdStop(); closeWarmup("Warm-up skipped."); } }, 30); };
-  $("wuHold").addEventListener("pointerdown", holdGo);
-  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => $("wuHold").addEventListener(ev, holdStop));
-  $("wuHold").addEventListener("contextmenu", e => e.preventDefault());
+
   document.querySelectorAll("[data-step]").forEach(b => b.onclick = () => {
     const f = $(b.dataset.step), dir = Number(b.dataset.dir), v = parseFloat(String(f.value).replace(",", ".")) || 0;
     const step = b.dataset.step === "w" ? wStep() : 1;
     f.value = trim(Math.max(0, v + dir * step));
   });
   $("save").onclick = saveSet;
-  $("restMore").onclick = () => { const end = Number(mem.get("restEnd") || 0) || Date.now(); mem.set("restEnd", String(end + 30000)); runRest(); };
-  $("restSkip").onclick = stopRest;
+  $("timerPill").onclick = e => {
+    e.stopPropagation();
+    if ($("timerPill").classList.contains("done")) { stopRest(); return; }
+    const open = $("timerMenu").hidden; $("timerMenu").hidden = !open; $("timerPill").setAttribute("aria-expanded", String(open));
+  };
+  $("restMore").onclick = e => { e.stopPropagation(); const end = Number(mem.get("restEnd") || 0) || Date.now(); mem.set("restEnd", String(end + 30000)); runRest(); };
+  $("restSkip").onclick = e => { e.stopPropagation(); stopRest(); toast("Rest skipped."); };
+  document.addEventListener("click", e => { if (!$("timerMenu").hidden && !e.target.closest(".timerwrap")) closeTimerMenu(); });
+  document.addEventListener("visibilitychange", syncWake);
+  // settings sections: only one open at a time
+  document.querySelectorAll(".grp").forEach(d => d.addEventListener("toggle", () => { if (d.open) document.querySelectorAll(".grp").forEach(o => { if (o !== d) o.open = false; }); }));
   // body weight
   const bwStep = dir => { const v = parseFloat(String($("bw").value).replace(",", ".")) || 0; $("bw").value = trim(Math.max(0, v + dir * 0.1)); };
   $("bwMinus").onclick = () => bwStep(-1); $("bwPlus").onclick = () => bwStep(1);
@@ -904,12 +924,7 @@ function wire() {
   $("restOn").onchange = () => { prefs = { ...prefs, restOn: $("restOn").checked }; savePrefs(); if (!prefs.restOn) stopRest(); };
   const prefAdj = (k, d, lo, hi) => { prefs = { ...prefs, [k]: Math.min(hi, Math.max(lo, prefs[k] + d)) }; savePrefs(); renderSettings(); };
   $("weekDown").onclick = () => prefAdj("weekTarget", -1, 1, 7); $("weekUp").onclick = () => prefAdj("weekTarget", 1, 1, 7);
-  $("wuMinDown").onclick = () => prefAdj("wuMin", -1, 1, 30); $("wuMinUp").onclick = () => prefAdj("wuMin", 1, 1, 30);
-  $("commitOn").onchange = () => { prefs = { ...prefs, commit: $("commitOn").checked }; savePrefs(); };
-  $("wuItemsSave").onclick = () => {
-    const items = $("wuItems").value.split("\n").map(x => x.trim()).filter(Boolean).slice(0, 12);
-    prefs = { ...prefs, wuItems: items.length ? items : DEFAULT_WU }; savePrefs(); $("wuItems").blur(); renderSettings(); toast("Warm-up checklist saved.");
-  };
+  $("awakeOn").onchange = () => { prefs = { ...prefs, keepAwake: $("awakeOn").checked }; savePrefs(); syncWake(); };
   const restAdj = d => { prefs = { ...prefs, restSec: Math.min(600, Math.max(15, prefs.restSec + d)) }; $("restSecLbl").textContent = fmtSec(prefs.restSec); savePrefs(); };
   $("restDown").onclick = () => restAdj(-15); $("restUp").onclick = () => restAdj(15);
   $("goalSave").onclick = () => {
@@ -941,7 +956,7 @@ function wire() {
     $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true");
     $("menuOpen").setAttribute("aria-expanded", "false"); $("menuOpen").focus();
   };
-  $("signout").onclick = () => { closeMenu(); stopRest(); mem.set("wuEnd", ""); $("wuLayer").hidden = true; clearInterval(wuTick); applyLock(); be.signOut(); };
+  $("signout").onclick = () => { closeMenu(); stopRest(); be.signOut(); };
   $("menuOpen").onclick = openMenu; $("menuClose").onclick = closeMenu; $("drawerBackdrop").onclick = closeMenu;
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
   // colours
@@ -965,9 +980,8 @@ async function start() {
   be.onUser(u => {
     if (unsub) { unsub(); unsub = null; }
     if (!u) { uid = null; sessions = {}; days = [...DEFAULT_DAYS]; lists = clone(BASE); prefs = { ...DEFAULT_PREFS }; body = { entries: {} }; show("gate"); return; }
-    uid = u.uid; $("who").textContent = "Signed in as " + (u.email || u.name);
+    uid = u.uid; $("who").textContent = "Signed in as " + (u.email || u.name); $("sumAcc").textContent = u.email || u.name || "";
     show("main"); renderTabs(); renderAll();
-    if (Number(mem.get("wuEnd") || 0) > Date.now()) showWarmup();
     unsub = be.subscribe(uid, applyDocs, () => { $("status").textContent = "Lost connection to your log. Reopen the app to reconnect."; });
   });
   if (!mock && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
