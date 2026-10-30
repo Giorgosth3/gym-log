@@ -88,7 +88,7 @@ function renderSelect() {
   sel.innerHTML = "";
   namesFor(day).forEach(n => sel.appendChild(el("option", null, n)));
   if (keep && namesFor(day).includes(keep)) sel.value = keep;
-  renderHint(); renderToday(); renderSuggest(true);
+  renderHint(); renderToday();
 }
 // sets: chips; when `rerender` is given, chips are tappable and tapping one offers "Remove set"
 function chipsInto(box, sets, rerender) {
@@ -115,30 +115,6 @@ function setBar(sets, rerender) {
   no.onclick = () => { selSet = null; rerender(); };
   const b = el("div", "btns"); b.append(yes, no); bar.appendChild(b);
   return bar;
-}
-// #1 progressive overload: what to lift today, from your last session's working sets
-function suggestionFor(ex, before) {
-  const prev = working(allSets().filter(s => s.ex === ex && s.date < before));
-  if (!prev.length) return null;
-  const last = prev.reduce((a, s) => s.date > a ? s.date : a, "");
-  const sets = prev.filter(s => s.date === last);
-  const top = Math.max(...sets.map(s => s.w)), atTop = sets.filter(s => s.w === top);
-  const lo = prefs.repMin, hi = prefs.repMax, best = Math.max(...atTop.map(s => s.r));
-  const allTop = atTop.every(s => s.r >= hi);
-  const rated = atTop.filter(s => s.rir != null), allFailure = rated.length === atTop.length && rated.every(s => s.rir === 0);
-  if (allTop && !allFailure) return { up: true, w: top, next: disp(top) + wStep(), reps: lo + "–" + hi, why: "Last time you hit " + hi + "+ reps on every working set at " + fmtW(top) + ", so go up " + trim(wStep()) + U() + "." };
-  if (allTop && allFailure) return { up: false, w: top, next: disp(top), reps: lo + "–" + hi, why: "You reached " + hi + " reps but every set was to failure. Stay here until it feels a little easier." };
-  const target = Math.min(hi, Math.max(lo, best + 1));
-  return { up: false, w: top, next: disp(top), reps: String(target), why: best < lo ? "Last time your best set was " + best + " reps. Build up to " + lo + " at this weight." : "Last time your best set at " + fmtW(top) + " was " + best + " reps. Aim for " + target + "." };
-}
-function renderSuggest(prefill) {
-  const ex = $("ex").value, box = $("suggest"); box.innerHTML = "";
-  const sg = ex ? suggestionFor(ex, $("date").value) : null;
-  box.hidden = !sg; if (!sg) return;
-  box.className = "suggest" + (sg.up ? "" : " hold");
-  const t = el("div"); t.append(el("b", null, "Today: " + trim(sg.next) + U() + " × " + sg.reps), el("span", "small", sg.why));
-  box.append(el("span", "ar", sg.up ? "↑" : "→"), t);
-  if (prefill) { $("w").value = trim(sg.next); $("r").value = String(sg.up ? prefs.repMin : parseInt(sg.reps, 10)); }
 }
 function renderHint() {
   const ex = $("ex").value, cur = $("date").value, h = $("hint"); h.innerHTML = "";
@@ -542,8 +518,6 @@ function saveWeighIn() {
 function renderSettings() {
   $("restOn").checked = !!prefs.restOn;
   $("restSecLbl").textContent = fmtSec(prefs.restSec);
-  $("repMinLbl").textContent = prefs.repMin + " min"; $("repMaxLbl").textContent = prefs.repMax + " max";
-  $("repHelp").textContent = "When every working set reaches " + prefs.repMax + " reps, the app suggests adding " + trim(wStep()) + U() + ".";
   $("weekLbl").textContent = String(prefs.weekTarget);
   $("wuMinLbl").textContent = prefs.wuMin + " min"; $("wuLen").textContent = prefs.wuMin + " min · recommended before lifting";
   $("commitOn").checked = !!prefs.commit;
@@ -889,8 +863,8 @@ function applyDocs(docs) {
 function wire() {
   $("date").value = todayISO();
   document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-  $("ex").onchange = () => { mem.set("ex_" + day, $("ex").value); renderHint(); renderToday(); renderSuggest(true); };
-  $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO(); renderUnits(); renderPane(); if (tab === "training") renderSuggest(true); };
+  $("ex").onchange = () => { mem.set("ex_" + day, $("ex").value); renderHint(); renderToday(); };
+  $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO(); renderUnits(); renderPane(); };
   document.querySelectorAll("[data-pview]").forEach(b => b.onclick = () => { mem.set("pView", b.dataset.pview); renderProgress(); });
   // warm-up
   $("wuStart").onclick = startWarmup;
@@ -925,12 +899,10 @@ function wire() {
     const wkg = toKg(parseFloat($("w").value) || 0), bkg = toKg(parseFloat($("bw").value) || 0);
     prefs = { ...prefs, units: b.dataset.unit }; savePrefs();
     $("w").value = trim(disp(wkg)); $("bw").value = trim(disp(bkg));
-    renderUnits(); renderSettings(); renderPane(); renderSuggest(false); toast("Showing weights in " + U() + ".");
+    renderUnits(); renderSettings(); renderPane(); toast("Showing weights in " + U() + ".");
   });
   $("restOn").onchange = () => { prefs = { ...prefs, restOn: $("restOn").checked }; savePrefs(); if (!prefs.restOn) stopRest(); };
-  const prefAdj = (k, d, lo, hi) => { prefs = { ...prefs, [k]: Math.min(hi, Math.max(lo, prefs[k] + d)) }; savePrefs(); renderSettings(); if (tab === "training") renderSuggest(false); };
-  $("repMinDown").onclick = () => prefAdj("repMin", -1, 1, prefs.repMax - 1); $("repMinUp").onclick = () => prefAdj("repMin", 1, 1, prefs.repMax - 1);
-  $("repMaxDown").onclick = () => prefAdj("repMax", -1, prefs.repMin + 1, 50); $("repMaxUp").onclick = () => prefAdj("repMax", 1, prefs.repMin + 1, 50);
+  const prefAdj = (k, d, lo, hi) => { prefs = { ...prefs, [k]: Math.min(hi, Math.max(lo, prefs[k] + d)) }; savePrefs(); renderSettings(); };
   $("weekDown").onclick = () => prefAdj("weekTarget", -1, 1, 7); $("weekUp").onclick = () => prefAdj("weekTarget", 1, 1, 7);
   $("wuMinDown").onclick = () => prefAdj("wuMin", -1, 1, 30); $("wuMinUp").onclick = () => prefAdj("wuMin", 1, 1, 30);
   $("commitOn").onchange = () => { prefs = { ...prefs, commit: $("commitOn").checked }; savePrefs(); };

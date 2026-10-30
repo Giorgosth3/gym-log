@@ -263,12 +263,7 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
 /* ---- coaching features ---- */
 .wucard{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border:1px dashed var(--line);border-radius:12px}
 .wucard b{display:block;font-weight:600}
-.suggest{display:flex;gap:10px;align-items:center;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--ok);
   background:color-mix(in srgb,var(--ok) 10%,var(--surface))}
-.suggest .ar{font:700 1.4rem var(--num);color:var(--ok)}
-.suggest b{display:block;font:700 1.1rem var(--num);color:var(--ok)}
-.suggest .small{display:block;line-height:1.3}
-.suggest.hold{border-color:var(--line);background:var(--surface)}.suggest.hold b,.suggest.hold .ar{color:var(--ink)}
 .chip.wu,button.chip.wu{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
 .chip .rir{font:500 .7rem var(--num);color:var(--muted);margin-left:4px}
 .seg.big button{padding:10px 4px;font-size:.95rem}
@@ -353,7 +348,6 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
       <div>
         <label class="lbl" for="ex">Exercise</label>
         <select id="ex"></select>
-        <div class="suggest" id="suggest" hidden></div>
         <div class="hint lastrow" id="hint" style="margin-top:8px"></div>
       </div>
       <div class="pair">
@@ -474,9 +468,6 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
 
       <section class="drawer-sec">
         <span class="lbl">Training targets</span>
-        <div class="srow"><span>Rep range</span><div class="mini wide"><button id="repMinDown" aria-label="Lower minimum reps">−</button><span id="repMinLbl">8</span><button id="repMinUp" aria-label="Higher minimum reps">+</button></div></div>
-        <div class="srow"><span></span><div class="mini wide"><button id="repMaxDown" aria-label="Lower maximum reps">−</button><span id="repMaxLbl">12</span><button id="repMaxUp" aria-label="Higher maximum reps">+</button></div></div>
-        <span class="small" id="repHelp">When every working set reaches 12 reps, the app suggests adding weight.</span>
         <div class="srow"><span>Sessions per week</span><div class="mini"><button id="weekDown" aria-label="Fewer sessions">−</button><span id="weekLbl">4</span><button id="weekUp" aria-label="More sessions">+</button></div></div>
       </section>
 
