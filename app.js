@@ -180,20 +180,7 @@ function saveSet() {
   toast(wu ? "Warm-up saved: " + fmtW(w) + " × " + r + offlineNote()
     : (prevMax >= 0 && w > prevMax ? "New personal best! " : "Saved: ") + ex + " set " + n + " — " + fmtW(w) + " × " + r + offlineNote());
   $("note").value = "";
-  rirFor = wu ? null : { date, t }; $("rirBox").hidden = wu;
-  document.querySelectorAll("[data-rir]").forEach(b => b.setAttribute("aria-pressed", "false"));
   if (prefs.restOn) startRest(prefs.restSec);
-}
-
-/* ---------- reps left (RIR) for the set just saved ---------- */
-let rirFor = null;
-function setRir(v) {
-  if (!rirFor) return;
-  const s = sessions[rirFor.date]; if (!s) return;
-  const next = { date: s.date, sets: s.sets.map(x => x.t === rirFor.t ? { ...x, rir: v } : x) };
-  sessions[s.date] = next; writeSession(s.date, next); renderToday();
-  document.querySelectorAll("[data-rir]").forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.rir) === v)));
-  setTimeout(() => { $("rirBox").hidden = true; }, 500);
 }
 
 /* ---------- warm-up timer (optional commit lock) ---------- */
@@ -696,10 +683,10 @@ function exportExcel() {
   const wb = XLSX.utils.book_new(), count = {};
   const data = rows.map(s => {
     const k = s.date + "|" + s.day + "|" + s.ex; count[k] = (count[k] || 0) + 1;
-    return { "Date": dt(s.date), "Day": s.day, "Exercise": s.ex, "Set #": count[k], "Weight (kg)": s.w, "Reps": s.r, "Volume (kg)": r1(s.w * s.r), "Warm-up": s.wu ? "Yes" : "", "Reps left": s.rir == null ? "" : (s.rir >= 3 ? "3+" : s.rir), "Notes": s.note || "" };
+    return { "Date": dt(s.date), "Day": s.day, "Exercise": s.ex, "Set #": count[k], "Weight (kg)": s.w, "Reps": s.r, "Volume (kg)": r1(s.w * s.r), "Warm-up": s.wu ? "Yes" : "", "Notes": s.note || "" };
   });
-  const ws = XLSX.utils.json_to_sheet(data.length ? data : [{ "Date": "", "Day": "", "Exercise": "", "Set #": "", "Weight (kg)": "", "Reps": "", "Volume (kg)": "", "Warm-up": "", "Reps left": "", "Notes": "" }], { cellDates: true, dateNF: "dd-mmm-yy" });
-  ws["!cols"] = [{ wch: 11 }, { wch: 10 }, { wch: 36 }, { wch: 6 }, { wch: 11 }, { wch: 6 }, { wch: 11 }, { wch: 8 }, { wch: 9 }, { wch: 20 }];
+  const ws = XLSX.utils.json_to_sheet(data.length ? data : [{ "Date": "", "Day": "", "Exercise": "", "Set #": "", "Weight (kg)": "", "Reps": "", "Volume (kg)": "", "Warm-up": "", "Notes": "" }], { cellDates: true, dateNF: "dd-mmm-yy" });
+  ws["!cols"] = [{ wch: 11 }, { wch: 10 }, { wch: 36 }, { wch: 6 }, { wch: 11 }, { wch: 6 }, { wch: 11 }, { wch: 8 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, ws, "Log");
   if (bds.length) {
     const bws = XLSX.utils.json_to_sheet(bds.map(d => ({ "Date": dt(d), "Body weight (kg)": r1(body.entries[d]) })), { cellDates: true, dateNF: "dd-mmm-yy" });
@@ -815,9 +802,8 @@ function applyDocs(docs) {
 function wire() {
   $("date").value = todayISO();
   document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-  $("ex").onchange = () => { mem.set("ex_" + day, $("ex").value); $("rirBox").hidden = true; renderHint(); renderToday(); renderSuggest(true); };
+  $("ex").onchange = () => { mem.set("ex_" + day, $("ex").value); renderHint(); renderToday(); renderSuggest(true); };
   $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO(); renderUnits(); renderPane(); if (tab === "training") renderSuggest(true); };
-  document.querySelectorAll("[data-rir]").forEach(b => b.onclick = () => setRir(Number(b.dataset.rir)));
   document.querySelectorAll("[data-pview]").forEach(b => b.onclick = () => { mem.set("pView", b.dataset.pview); renderProgress(); });
   // warm-up
   $("wuStart").onclick = startWarmup;

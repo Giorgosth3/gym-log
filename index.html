@@ -253,7 +253,6 @@ button.chip.sel{border-color:var(--danger);background:color-mix(in srgb,var(--da
 .suggest b{display:block;font:700 1.1rem var(--num);color:var(--ok)}
 .suggest .small{display:block;line-height:1.3}
 .suggest.hold{border-color:var(--line);background:var(--surface)}.suggest.hold b,.suggest.hold .ar{color:var(--ink)}
-.rirbox{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:var(--surface)}
 .chip.wu,button.chip.wu{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
 .chip .rir{font:500 .7rem var(--num);color:var(--muted);margin-left:4px}
 .seg.big button{padding:10px 4px;font-size:.95rem}
@@ -352,11 +351,6 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
       <div><label class="lbl" for="note">Note (optional)</label><input type="text" id="note" placeholder="e.g. seat 5, drop set"></div>
       <div class="srow"><label for="wuSet">Warm-up set <span class="small">(not counted in PBs or progress)</span></label><span class="switch"><input type="checkbox" id="wuSet"><span></span></span></div>
       <button class="save" id="save">Save set</button>
-    </div>
-    <div class="rirbox" id="rirBox" hidden>
-      <span class="lbl" id="rirLbl">How many more reps could you have done?</span>
-      <div class="seg" role="group" aria-labelledby="rirLbl"><button data-rir="0">0</button><button data-rir="1">1</button><button data-rir="2">2</button><button data-rir="3">3+</button></div>
-      <span class="small">Optional, one tap. Helps the app judge when to suggest more weight.</span>
     </div>
     <div class="rest" id="restBox" hidden>
       <div><span class="small" id="restLbl">Rest timer</span><b id="restTime">1:30</b></div>
