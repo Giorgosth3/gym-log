@@ -353,6 +353,25 @@ details.inner summary{cursor:pointer;color:var(--muted);font-size:.9rem;padding:
 .drawer-panel{gap:10px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .drawer-panel > *{flex-shrink:0}
 body.menu-open{overflow:hidden}
+
+/* ---- celebrations ---- */
+.cele{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);
+  padding:max(20px,env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-right,0px)) max(20px,env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px))}
+.cele canvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.celecard{position:relative;z-index:1;width:100%;max-width:400px;background:var(--surface);color:var(--ink);border:2px solid var(--c);border-radius:20px;padding:22px 20px 16px;text-align:center;
+  box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 6px color-mix(in srgb,var(--c) 18%,transparent);display:flex;flex-direction:column;gap:10px;align-items:center}
+.cbadge{width:76px;height:76px;border-radius:50%;background:color-mix(in srgb,var(--c) 18%,var(--surface));border:2px solid var(--c);display:flex;align-items:center;justify-content:center;color:var(--c)}
+.cbadge svg{width:40px;height:40px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ckick{font:700 .78rem var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--c)}
+.cbig{font:700 2.2rem/1.05 var(--display);letter-spacing:.02em;text-wrap:balance}
+.csub{font:600 1.05rem var(--body)}
+.cwas{font:500 .9rem var(--num);color:var(--muted)}
+.cnums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%}
+.cnums div{background:var(--chip);border-radius:10px;padding:8px 4px}.cnums b{display:block;font:700 1.15rem var(--num)}.cnums span{font-size:.72rem;color:var(--muted)}
+.cdots{display:flex;gap:6px}.cdots i{width:28px;height:28px;border-radius:8px;background:var(--c);display:block}.cdots i.off{background:var(--chip)}
+.cbtn{margin-top:4px;font:600 1rem var(--body);padding:11px 28px;border-radius:999px;border:0;background:var(--c);color:#111;cursor:pointer}
+@media (prefers-reduced-motion: no-preference){.celecard{animation:celePop .35s cubic-bezier(.2,1.4,.4,1)}}
+@keyframes celePop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
 </style>
 </head>
 <body>
@@ -452,6 +471,11 @@ body.menu-open{overflow:hidden}
     <div id="bodyBody"></div>
   </section>
 
+  <div class="cele" id="cele" hidden role="dialog" aria-modal="true" aria-labelledby="celeTitle">
+    <canvas id="confetti" aria-hidden="true"></canvas>
+    <div class="celecard" id="celeCard"></div>
+  </div>
+
   <div id="toast" role="status" aria-live="polite"></div>
 
   <nav class="tabbar" aria-label="Sections">
@@ -493,6 +517,7 @@ body.menu-open{overflow:hidden}
           <div class="srow"><span id="unitLbl">Units</span><div class="seg" role="group" aria-labelledby="unitLbl" style="width:130px"><button data-unit="kg">kg</button><button data-unit="lbs">lbs</button></div></div>
           <div class="srow"><label for="restOn">Rest timer after each set</label><span class="switch"><input type="checkbox" id="restOn"><span></span></span></div>
           <div class="srow"><span>Rest time</span><div class="mini"><button id="restDown" aria-label="Shorter rest">−</button><span id="restSecLbl">1:30</span><button id="restUp" aria-label="Longer rest">+</button></div></div>
+          <div class="srow"><label for="celeOn">Celebrations <span class="small">(personal bests, workout done, weekly target, goal)</span></label><span class="switch"><input type="checkbox" id="celeOn"><span></span></span></div>
           <div class="srow"><label for="awakeOn">Keep screen on <span class="small">(while on Training)</span></label><span class="switch"><input type="checkbox" id="awakeOn"><span></span></span></div>
           <div class="srow"><span>Sessions per week</span><div class="mini"><button id="weekDown" aria-label="Fewer sessions">−</button><span id="weekLbl">4</span><button id="weekUp" aria-label="More sessions">+</button></div></div>
         </div>

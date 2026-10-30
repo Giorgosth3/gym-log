@@ -9,7 +9,7 @@ const BASE = {
   Legs: ["Hack squat", "Hamstring curls", "Leg extensions (aristera)", "Calves"],
   Shoulders: ["Shoulder press", "Lateral raises machine", "Face pulls"]
 };
-const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null, weekTarget: 4, keepAwake: true };
+const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null, weekTarget: 4, keepAwake: true, celebrate: true };
 const KG_LB = 2.20462;
 
 /* ---------- helpers ---------- */
@@ -197,18 +197,109 @@ function saveSet() {
   const date = $("date").value || todayISO(), ex = $("ex").value;
   if (!ex) { toast("Pick an exercise first.", true); return; }
   const w = toKg(v), wu = false, t = Date.now();
-  const prevMax = Math.max(-1, ...working(allSets().filter(s => s.ex === ex)).map(s => s.w));
+  const prevSets = working(allSets().filter(s => s.ex === ex));
+  const prevBest = prevSets.length ? prevSets.reduce((a, s) => (s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a) : null;
+  const prevMax = prevBest ? prevBest.w : -1;
+  const firstOfDay = !working((sessions[date] || {}).sets || []).length;
   const s = sessions[date] || { date, sets: [] };
   const set = { day, ex, w, r, note: $("note").value.trim(), t }; if (wu) set.wu = true;
   const next = { date, sets: [...(s.sets || []), set] };
   sessions[date] = next;
   writeSession(date, next);
   const n = working(next.sets.filter(x => x.ex === ex)).length;
-  toast(wu ? "Warm-up saved: " + fmtW(w) + " × " + r + offlineNote()
-    : (prevMax >= 0 && w > prevMax ? "New personal best! " : "Saved: ") + ex + " set " + n + " — " + fmtW(w) + " × " + r + offlineNote());
+  const isPB = prevMax >= 0 && w > prevMax;
+  toast((isPB ? "New personal best! " : "Saved: ") + ex + " set " + n + " — " + fmtW(w) + " × " + r + offlineNote());
   $("note").value = "";
   renderExercise(true);
   if (prefs.restOn) startRest(prefs.restSec);
+  // big moments only
+  if (isPB) celebrate("pb", { ex, w, r, prev: prevBest });
+  checkDayDone(date);
+  if (firstOfDay) checkWeek(date);
+}
+
+/* ---------- celebrations: personal best, workout complete, weekly target, goal ---------- */
+const celeQueue = [];
+function checkDayDone(date) {
+  const list = exercisesFor(day); if (list.length < 2) return;
+  const sets = working(((sessions[date] || {}).sets || []).filter(s => s.day === day));
+  if (!list.every(ex => sets.some(s => s.ex === ex))) return;
+  const key = "celeDay_" + date + "_" + day; if (mem.get(key)) return; mem.set(key, "1");
+  // personal bests set today: sets heavier than everything before today
+  let pbs = 0;
+  list.forEach(ex => {
+    const before = working(allSets().filter(s => s.ex === ex && s.date < date)); if (!before.length) return;
+    const top = Math.max(...before.map(s => s.w)); if (sets.some(s => s.ex === ex && s.w > top)) pbs++;
+  });
+  celebrate("day", { day, exercises: list.length, sets: sets.length, pbs });
+}
+function checkWeek(date) {
+  const [y, m, d] = date.split("-").map(Number), mon = mondayOf(new Date(y, m - 1, d)), a = isoOf(mon);
+  const sun = new Date(mon); sun.setDate(sun.getDate() + 6); const b = isoOf(sun);
+  const tr = [...trainedDates()].filter(x => x >= a && x <= b);
+  if (tr.length !== prefs.weekTarget) return;
+  const key = "celeWeek_" + a; if (mem.get(key)) return; mem.set(key, "1");
+  const dots = []; for (let i = 0; i < 7; i++) { const x = new Date(mon); x.setDate(x.getDate() + i); dots.push(tr.includes(isoOf(x))); }
+  celebrate("week", { n: tr.length, dots });
+}
+function celebrate(type, data) {
+  if (prefs.celebrate === false) return;
+  celeQueue.push({ type, data }); if ($("cele").hidden) nextCele();
+}
+const CELE = {
+  pb: { c: "#f5c542", icon: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>' },
+  day: { c: "#3fc27a", icon: '<path d="M20 6L9 17l-5-5"/>' },
+  week: { c: "#ff6a33", icon: '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/>' },
+  goal: { c: "#5bc0eb", icon: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>' }
+};
+function nextCele() {
+  const item = celeQueue.shift(); if (!item) return;
+  const { type, data } = item, def = CELE[type], card = $("celeCard"); card.innerHTML = "";
+  $("cele").style.setProperty("--c", def.c);
+  const badge = el("div", "cbadge"); badge.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + def.icon + "</svg>";
+  card.appendChild(badge);
+  const add = (cls, text, id) => { const e = el("div", cls, text); if (id) e.id = id; card.appendChild(e); return e; };
+  if (type === "pb") {
+    add("ckick", "New personal best"); add("cbig", fmtW(data.w) + " × " + data.r, "celeTitle"); add("csub", data.ex);
+    if (data.prev) add("cwas", "Previous best: " + fmtW(data.prev.w) + " × " + data.prev.r + " · " + shortDate(data.prev.date));
+  } else if (type === "day") {
+    add("ckick", "Workout complete"); add("cbig", data.day + " day done", "celeTitle");
+    const nums = el("div", "cnums");
+    [[data.exercises, "exercises"], [data.sets, "sets"], [data.pbs, data.pbs === 1 ? "personal best" : "personal bests"]].forEach(([v, l]) => { const d = el("div"); d.append(el("b", null, String(v)), el("span", null, l)); nums.appendChild(d); });
+    card.appendChild(nums);
+  } else if (type === "week") {
+    add("ckick", "Weekly target reached"); add("cbig", data.n + " session" + (data.n === 1 ? "" : "s"), "celeTitle"); add("csub", "this week. Consistency wins.");
+    const dots = el("div", "cdots"); dots.setAttribute("aria-label", "Days trained this week");
+    data.dots.forEach((on, i) => { const d = el("i", on ? "" : "off"); d.title = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]; dots.appendChild(d); });
+    card.appendChild(dots); add("small", "Mon – Sun");
+  } else if (type === "goal") {
+    add("ckick", "Goal reached"); add("cbig", fmtW(data.goal), "celeTitle"); add("csub", "You hit your goal weight");
+    const weeks = Math.max(1, Math.round((Date.now() - new Date(data.since).getTime()) / (7 * 86400e3)));
+    add("cwas", "Started at " + fmtW(data.start) + " · " + weeks + " week" + (weeks === 1 ? "" : "s") + " ago");
+  }
+  const btn = el("button", "cbtn", "Nice!"); btn.type = "button"; btn.onclick = closeCele; card.appendChild(btn);
+  add("small", "Tap anywhere to keep going");
+  $("cele").hidden = false; setTimeout(() => btn.focus(), 30);
+  try { navigator.vibrate && navigator.vibrate([60, 40, 120]); } catch (e) {}
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) confetti(def.c);
+}
+function closeCele() { $("cele").hidden = true; stopConfetti(); setTimeout(nextCele, 150); }
+let confRaf = null;
+function stopConfetti() { cancelAnimationFrame(confRaf); confRaf = null; const cv = $("confetti"); cv.getContext("2d").clearRect(0, 0, cv.width, cv.height); }
+function confetti(main) {
+  const cv = $("confetti"), dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr; const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cols = [main, main, "#ffffff", "#ff6a33", "#f5c542", "#3fc27a", "#5bc0eb", "#e86a92"];
+  const P = Array.from({ length: 140 }, () => ({ x: W / 2 + (Math.random() - .5) * W * .3, y: H * .35, vx: (Math.random() - .5) * 14, vy: -Math.random() * 14 - 4,
+    w: 6 + Math.random() * 7, h: 3 + Math.random() * 5, a: Math.random() * 6.3, va: (Math.random() - .5) * .3, c: cols[Math.floor(Math.random() * cols.length)] }));
+  const t0 = performance.now(); cancelAnimationFrame(confRaf);
+  const step = now => {
+    const t = (now - t0) / 1000; ctx.clearRect(0, 0, W, H);
+    P.forEach(p => { p.vy += .35; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.a += p.va;
+      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - 1.4) / .6); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore(); });
+    if (t < 2) confRaf = requestAnimationFrame(step); else stopConfetti();
+  };
+  confRaf = requestAnimationFrame(step);
 }
 
 /* ---------- rest timer: a pill in the top bar, visible on every tab ---------- */
@@ -404,10 +495,8 @@ function renderProgress() {
     chart.append(seg, head, big, lineChart(dates.map(d => ({ label: shortDate(d), v: disp(per[d]) })), { area: true, label: (metric === "est" ? "Estimated max" : "Top weight") + " per session for " + pe }));
     if (metric === "est") chart.appendChild(el("span", "small", "Estimated from your weight and reps, so you see progress even when you add reps instead of weight."));
     box.appendChild(chart);
-    const weekAgo = isoOf(new Date(Date.now() - 6 * 86400e3));
-    const vol = sets.filter(s => s.date >= weekAgo && s.date <= todayISO()).reduce((a, s) => a + disp(s.w) * s.r, 0);
     const stats = el("div", "stats");
-    stats.append(stat(String(dates.length), dates.length === 1 ? "session" : "sessions"), stat(fmtW(pb.w), "heaviest set"), stat(Math.round(vol).toLocaleString("en-GB") + U(), "volume last 7 days"));
+    stats.append(stat(String(dates.length), dates.length === 1 ? "session" : "sessions"), stat(fmtW(pb.w), "heaviest set"), stat(shortDate(dates[dates.length - 1]), "last session"));
     box.appendChild(stats);
   }
   // #8 plateau alerts for every exercise in this workout
@@ -530,8 +619,15 @@ function saveWeighIn() {
   const v = parseFloat(String($("bw").value).replace(",", "."));
   if (!(v > 0)) { toast("Enter your weight first.", true); return; }
   const d = $("date").value || todayISO(), existed = body.entries[d] != null;
+  const ds0 = bodyDates(), start = ds0.length ? body.entries[ds0[0]] : null;
   body = { ...body, entries: { ...body.entries, [d]: toKg(v) } };
   saveBody(); renderBody(); toast((existed ? "Updated " : "Saved ") + longDate(d) + ": " + trim(v) + U() + offlineNote());
+  // goal reached: crossed the goal, heading the right way from where you started
+  const g = prefs.goal, kg = toKg(v);
+  if (g != null && start != null && Math.abs(start - g) > 0.05) {
+    const reached = start > g ? kg <= g + 0.05 : kg >= g - 0.05, key = "celeGoal_" + g;
+    if (reached && !mem.get(key)) { mem.set(key, "1"); celebrate("goal", { goal: g, start, since: ds0[0] }); }
+  }
 }
 
 /* ---------- settings ---------- */
@@ -540,6 +636,7 @@ function renderSettings() {
   $("restSecLbl").textContent = fmtSec(prefs.restSec);
   $("weekLbl").textContent = String(prefs.weekTarget);
   $("awakeOn").checked = prefs.keepAwake !== false;
+  $("celeOn").checked = prefs.celebrate !== false;
   $("sumTr").textContent = U() + " · rest " + (prefs.restOn ? fmtSec(prefs.restSec) : "off");
   $("sumDays").textContent = days.length + " day" + (days.length === 1 ? "" : "s");
   // workout days
@@ -765,10 +862,10 @@ function exportExcel() {
   const wb = XLSX.utils.book_new(), count = {};
   const data = rows.map(s => {
     const k = s.date + "|" + s.day + "|" + s.ex; count[k] = (count[k] || 0) + 1;
-    return { "Date": dt(s.date), "Day": s.day, "Exercise": s.ex, "Set #": count[k], "Weight (kg)": s.w, "Reps": s.r, "Volume (kg)": r1(s.w * s.r), "Warm-up": s.wu ? "Yes" : "", "Notes": s.note || "" };
+    return { "Date": dt(s.date), "Day": s.day, "Exercise": s.ex, "Set #": count[k], "Weight (kg)": s.w, "Reps": s.r, "Warm-up": s.wu ? "Yes" : "", "Notes": s.note || "" };
   });
-  const ws = XLSX.utils.json_to_sheet(data.length ? data : [{ "Date": "", "Day": "", "Exercise": "", "Set #": "", "Weight (kg)": "", "Reps": "", "Volume (kg)": "", "Warm-up": "", "Notes": "" }], { cellDates: true, dateNF: "dd-mmm-yy" });
-  ws["!cols"] = [{ wch: 11 }, { wch: 10 }, { wch: 36 }, { wch: 6 }, { wch: 11 }, { wch: 6 }, { wch: 11 }, { wch: 8 }, { wch: 20 }];
+  const ws = XLSX.utils.json_to_sheet(data.length ? data : [{ "Date": "", "Day": "", "Exercise": "", "Set #": "", "Weight (kg)": "", "Reps": "", "Warm-up": "", "Notes": "" }], { cellDates: true, dateNF: "dd-mmm-yy" });
+  ws["!cols"] = [{ wch: 11 }, { wch: 10 }, { wch: 36 }, { wch: 6 }, { wch: 11 }, { wch: 6 }, { wch: 8 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, ws, "Log");
   if (bds.length) {
     const bws = XLSX.utils.json_to_sheet(bds.map(d => ({ "Date": dt(d), "Body weight (kg)": r1(body.entries[d]) })), { cellDates: true, dateNF: "dd-mmm-yy" });
@@ -925,6 +1022,9 @@ function wire() {
   const prefAdj = (k, d, lo, hi) => { prefs = { ...prefs, [k]: Math.min(hi, Math.max(lo, prefs[k] + d)) }; savePrefs(); renderSettings(); };
   $("weekDown").onclick = () => prefAdj("weekTarget", -1, 1, 7); $("weekUp").onclick = () => prefAdj("weekTarget", 1, 1, 7);
   $("awakeOn").onchange = () => { prefs = { ...prefs, keepAwake: $("awakeOn").checked }; savePrefs(); syncWake(); };
+  $("celeOn").onchange = () => { prefs = { ...prefs, celebrate: $("celeOn").checked }; savePrefs(); };
+  $("cele").addEventListener("click", e => { if (!e.target.closest(".cbtn")) closeCele(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("cele").hidden) closeCele(); });
   const restAdj = d => { prefs = { ...prefs, restSec: Math.min(600, Math.max(15, prefs.restSec + d)) }; $("restSecLbl").textContent = fmtSec(prefs.restSec); savePrefs(); };
   $("restDown").onclick = () => restAdj(-15); $("restUp").onclick = () => restAdj(15);
   $("goalSave").onclick = () => {
