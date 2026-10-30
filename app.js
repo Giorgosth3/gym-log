@@ -946,14 +946,14 @@ function wire() {
   // side menu
   const openMenu = () => {
     renderSettings();
-    $("drawer").classList.add("open"); $("drawer").setAttribute("aria-hidden", "false");
+    $("drawer").classList.add("open"); $("drawer").setAttribute("aria-hidden", "false"); document.body.classList.add("menu-open");
     $("menuOpen").setAttribute("aria-expanded", "true"); setTimeout(() => $("menuClose").focus(), 50);
   };
   const closeMenu = () => {
     if (!$("drawer").classList.contains("open")) return;
     dayEditing = null;
     if (themeEditing) { themeEditing = null; $("themeEdit").hidden = true; paintTheme(); renderThemes(); }
-    $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true");
+    $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true"); document.body.classList.remove("menu-open");
     $("menuOpen").setAttribute("aria-expanded", "false"); $("menuOpen").focus();
   };
   $("signout").onclick = () => { closeMenu(); stopRest(); be.signOut(); };

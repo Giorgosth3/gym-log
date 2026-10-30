@@ -350,7 +350,9 @@ body.resting .brand img{display:none}
 .gb .lbl{margin-bottom:0}
 details.inner summary{cursor:pointer;color:var(--muted);font-size:.9rem;padding:4px 0}
 .danger-ghost{color:var(--danger)}
-.drawer-panel{gap:10px}
+.drawer-panel{gap:10px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.drawer-panel > *{flex-shrink:0}
+body.menu-open{overflow:hidden}
 </style>
 </head>
 <body>
