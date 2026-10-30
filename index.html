@@ -79,7 +79,7 @@ h1{font-family:var(--display);font-weight:700;font-size:2rem;letter-spacing:.02e
   border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer}
 .days button[aria-pressed="true"]{background:var(--pressed);color:var(--pressed-ink);border-color:var(--pressed)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px}
-label.lbl{font:600 .75rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
+.lbl{font:600 .75rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
 select,input[type=text],input[type=date]{width:100%;font:500 1.05rem var(--body);padding:12px;border-radius:10px;
   border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 #date{width:auto;font:500 .9rem var(--num);padding:6px 8px}
@@ -121,6 +121,32 @@ h2{font-family:var(--display);font-weight:700;font-size:1.3rem;text-transform:up
 .more{font:600 .8rem var(--body);background:transparent;border:0;color:var(--accent);cursor:pointer;padding:2px 0;align-self:flex-start}
 .empty{color:var(--muted);font-size:.95rem;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center}
 .foot{display:flex;flex-direction:column;gap:10px}
+/* side menu */
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;flex-shrink:0;border-radius:10px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:1.1rem;cursor:pointer;padding:0}
+.icon-btn svg{width:22px;height:22px;fill:none}
+.drawer{position:fixed;inset:0;z-index:30;visibility:hidden}
+.drawer.open{visibility:visible}
+.drawer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0}
+.drawer-panel{position:absolute;top:0;bottom:0;left:0;width:min(340px,86vw);background:var(--bg);color:var(--ink);
+  border-right:1px solid var(--line);overflow-y:auto;transform:translateX(-102%);
+  display:flex;flex-direction:column;gap:22px;
+  padding:calc(env(safe-area-inset-top,0px) + 16px) 18px calc(env(safe-area-inset-bottom,0px) + 24px) max(18px,env(safe-area-inset-left,0px))}
+.drawer.open .drawer-backdrop{opacity:1}
+.drawer.open .drawer-panel{transform:none}
+@media (prefers-reduced-motion: no-preference){
+  .drawer-backdrop{transition:opacity .2s ease}
+  .drawer-panel{transition:transform .22s ease}
+  .drawer{transition:visibility 0s linear .22s}
+  .drawer.open{transition:none}
+}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.drawer-sec{display:flex;flex-direction:column;gap:8px}
+.drawer-sec .lbl{margin-bottom:0}
+.drawer-sec .small{margin:0}
+.drawer .addrow{margin-top:0}
+.drawer .status{text-align:left}
+.drawer .account{margin-top:auto;flex-direction:row}
 .ghost{font:600 1rem var(--body);padding:13px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
 details summary{cursor:pointer;color:var(--muted);font-size:.9rem;padding:4px 0}
 .addrow{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px}
@@ -160,7 +186,12 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 <div class="wrap" id="main" hidden>
   <div class="topbar">
     <header>
-      <div class="brand"><img src="icons/icon-192.png" alt=""><h1>Gym Log</h1></div>
+      <div class="brand">
+        <button class="icon-btn" id="menuOpen" aria-label="Open settings menu" aria-controls="drawer" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+        <img src="icons/icon-192.png" alt=""><h1>Gym Log</h1>
+      </div>
       <input type="date" id="date" aria-label="Session date">
     </header>
     <div class="days" role="group" aria-label="Workout day">
@@ -197,26 +228,47 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
     <div id="history"></div>
   </section>
 
-  <section class="foot">
-    <button class="ghost" id="export">Export all sets to Excel</button>
-    <details><summary>Add an exercise to the list</summary>
-      <div class="addrow"><input type="text" id="newEx" placeholder="Exercise name" aria-label="New exercise name"><button class="ghost" id="addEx">Add</button></div>
-    </details>
-    <details><summary>Import sets from an Excel file</summary>
-      <p class="small">Use a file exported from Gym Log (columns: Date, Day, Exercise, Weight (kg), Reps, Notes). Sets you already have are skipped.</p>
-      <input type="file" id="importFile" accept=".xlsx,.xls,.csv" aria-label="Excel file to import">
-    </details>
-    <div class="theme-row">
-      <label class="lbl" id="themeLbl">Colours</label>
-      <div class="theme-grid" role="group" aria-labelledby="themeLbl">
-        <button data-theme-pick="auto">Auto</button><button data-theme-pick="light">Light</button>
-        <button data-theme-pick="dark">Dark</button><button data-theme-pick="ael">AEL Blue</button>
-        <button data-theme-pick="ael-yellow">AEL Yellow</button><button data-theme-pick="ael-soft">AEL Soft</button>
+  <!-- Side menu: settings and tools -->
+  <div class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
+    <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+      <div class="drawer-head">
+        <h2 id="drawerTitle">Settings</h2>
+        <button class="icon-btn" id="menuClose" aria-label="Close menu">✕</button>
       </div>
-    </div>
-    <div class="status" id="status"></div>
-    <div class="account"><span id="who"></span><button class="link" id="signout">Sign out</button></div>
-  </section>
+
+      <section class="drawer-sec">
+        <label class="lbl" id="themeLbl">Colours</label>
+        <div class="theme-grid" role="group" aria-labelledby="themeLbl">
+          <button data-theme-pick="auto">Auto</button><button data-theme-pick="light">Light</button>
+          <button data-theme-pick="dark">Dark</button><button data-theme-pick="ael">AEL Blue</button>
+          <button data-theme-pick="ael-yellow">AEL Yellow</button><button data-theme-pick="ael-soft">AEL Soft</button>
+        </div>
+      </section>
+
+      <section class="drawer-sec">
+        <label class="lbl" for="newEx">Add an exercise</label>
+        <p class="small">Adds it to the day you have selected at the top.</p>
+        <div class="addrow"><input type="text" id="newEx" placeholder="Exercise name"><button class="ghost" id="addEx">Add</button></div>
+      </section>
+
+      <section class="drawer-sec">
+        <span class="lbl">Your data</span>
+        <button class="ghost" id="export">Export all sets to Excel</button>
+        <details><summary>Import sets from an Excel file</summary>
+          <p class="small">Use a file exported from Gym Log (columns: Date, Day, Exercise, Weight (kg), Reps, Notes). Sets you already have are skipped.</p>
+          <input type="file" id="importFile" accept=".xlsx,.xls,.csv" aria-label="Excel file to import">
+        </details>
+        <div class="status" id="status"></div>
+      </section>
+
+      <div class="toast" id="drawerToast" role="status"></div>
+
+      <section class="drawer-sec account">
+        <span id="who"></span><button class="link" id="signout">Sign out</button>
+      </section>
+    </aside>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>

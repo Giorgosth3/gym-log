@@ -132,7 +132,7 @@ function pickExercise(d, ex, last) {
   renderHint(); renderHistory();
   window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
-function toast(msg, err) { const t = $("toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : ""); clearTimeout(toast.h); toast.h = setTimeout(() => { t.textContent = ""; }, 3500); }
+function toast(msg, err) { const t = $("drawer").classList.contains("open") ? $("drawerToast") : $("toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : ""); clearTimeout(toast.h); toast.h = setTimeout(() => { t.textContent = ""; }, 3500); }
 const offlineNote = () => navigator.onLine ? "" : " · syncs when you're back online";
 
 /* ---------- writes (local first; Firestore syncs in the background) ---------- */
@@ -316,7 +316,20 @@ function wire() {
     $("gateMsg").textContent = "";
     try { await be.signIn(); } catch (e) { $("gateMsg").textContent = "Sign-in didn't work: " + (e && (e.code || e.message) || "try again"); }
   };
-  $("signout").onclick = () => be.signOut();
+  $("signout").onclick = () => { closeMenu(); be.signOut(); };
+  const openMenu = () => {
+    $("drawer").classList.add("open"); $("drawer").setAttribute("aria-hidden", "false");
+    $("menuOpen").setAttribute("aria-expanded", "true"); setTimeout(() => $("menuClose").focus(), 50);
+  };
+  const closeMenu = () => {
+    if (!$("drawer").classList.contains("open")) return;
+    $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true");
+    $("menuOpen").setAttribute("aria-expanded", "false"); $("drawerToast").textContent = ""; $("menuOpen").focus();
+  };
+  $("menuOpen").onclick = openMenu;
+  $("menuClose").onclick = closeMenu;
+  $("drawerBackdrop").onclick = closeMenu;
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
   const paintTheme = () => {
     const t = mem.get("theme") || "auto";
     if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
