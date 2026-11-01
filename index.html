@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Gym Log</title>
 <meta name="description" content="Log your gym sets and see what you lifted last time.">
 <meta name="theme-color" content="#f7f5f2" media="(prefers-color-scheme: light)">
@@ -379,6 +379,17 @@ body.menu-open{overflow:hidden}
 .inapp ol{padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .inapp ol b{color:var(--ink)}
 .openreal{display:block;text-align:center;text-decoration:none;font-size:1.1rem;padding:13px}
+/* no zoom: no double-tap zoom anywhere; inputs at 16px+ so iPhone doesn't zoom in when you tap them */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+*{touch-action:manipulation}
+input,select,textarea{font-size:max(16px,1em)}
+.oitem input{font-size:16px}
+/* drag to reorder */
+.exb{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.exb.lifted{position:relative;z-index:4;box-shadow:0 12px 30px rgba(0,0,0,.45);border-color:var(--accent);transition:none;cursor:grabbing}
+body.dragging-ex{-webkit-user-select:none;user-select:none}
+body.dragging-ex .exgrid{touch-action:none}
+
 .inapplink{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inapplink code{font:500 .85rem var(--num);background:var(--chip);padding:6px 8px;border-radius:8px;overflow-wrap:anywhere;flex:1;min-width:0}
 </style>
@@ -545,8 +556,7 @@ body.menu-open{overflow:hidden}
           <span class="lbl">Workout days</span>
           <div class="olist" id="dayList"></div>
           <div class="addrow" style="margin-top:0"><input type="text" id="newDay" placeholder="New day, e.g. Arms" aria-label="New workout day name"><button class="ghost" id="addDay" style="padding:10px 14px">Add</button></div>
-          <span class="lbl" id="orderLbl">Exercise order</span>
-          <div class="olist" id="exOrder"></div>
+          <span class="small">To change the order of exercises, press and hold an exercise on the Training tab and drag it.</span>
         </div>
       </details>
       <details class="grp" data-grp="data">

@@ -103,17 +103,18 @@ function lastSession(ex) {
   const d = prev.reduce((a, s) => s.date > a ? s.date : a, "");
   return { date: d, sets: prev.filter(s => s.date === d).sort((a, b) => a.t - b.t) };
 }
-// #1 match set numbers: set N today starts from set N last time (or the last one if you do more sets)
+// Set 1 starts from set 1 last time (to match it); later sets start from the set you just did today.
 function prefillSet() {
   const ex = $("ex").value, note = $("filledNote"); note.hidden = true; if (!ex) return;
-  const n = todaySets(ex).length + 1, last = lastSession(ex);
-  if (last) {
-    const pick = last.sets[n - 1] || last.sets[last.sets.length - 1];
-    $("w").value = trim(disp(pick.w)); $("r").value = String(pick.r);
-    note.textContent = last.sets[n - 1] ? "Filled in from set " + n + " last time. Adjust if needed." : "Filled in from your last set last time. Adjust if needed.";
-    note.hidden = false;
-  } else {
-    const today = todaySets(ex); if (today.length) { const s = today[today.length - 1]; $("w").value = trim(disp(s.w)); $("r").value = String(s.r); }
+  const today = todaySets(ex), last = lastSession(ex);
+  if (today.length) {
+    const s = today[today.length - 1];
+    $("w").value = trim(disp(s.w)); $("r").value = String(s.r);
+    note.textContent = "Filled in from set " + today.length + " today. Adjust if needed."; note.hidden = false;
+  } else if (last) {
+    const s = last.sets[0];
+    $("w").value = trim(disp(s.w)); $("r").value = String(s.r);
+    note.textContent = "Filled in from set 1 last time (" + shortDate(last.date) + "). Adjust if needed."; note.hidden = false;
   }
 }
 function pickEx(ex) {
@@ -125,11 +126,11 @@ function renderExGrid() {
   const grid = $("exGrid"), cur = $("ex").value; grid.innerHTML = "";
   namesFor(day).forEach(ex => {
     const b = el("button", "exb"), n = todaySets(ex).length, last = n ? null : lastSession(ex);
-    b.type = "button"; b.setAttribute("aria-pressed", String(ex === cur));
+    b.type = "button"; b.dataset.ex = ex; b.setAttribute("aria-pressed", String(ex === cur));
     if (n) b.classList.add("done");
-    const sub = n ? "✓ " + n + " set" + (n > 1 ? "s" : "") : last ? "Last: " + fmtW(last.sets[last.sets.length - 1].w) + " × " + last.sets[last.sets.length - 1].r : "Not done yet";
+    const sub = n ? "✓ " + n + " set" + (n > 1 ? "s" : "") : last ? "Last: " + fmtW(last.sets[0].w) + " × " + last.sets[0].r : "Not done yet";
     b.append(el("span", null, ex), el("small", null, sub));
-    b.onclick = () => pickEx(ex);
+    b.onclick = () => { if (dragJustEnded) { dragJustEnded = false; return; } pickEx(ex); };
     grid.appendChild(b);
   });
   const add = el("button", "exb add", "+ Add exercise"); add.type = "button";
@@ -199,7 +200,6 @@ function saveSet() {
   const w = toKg(v), wu = false, t = Date.now();
   const prevSets = working(allSets().filter(s => s.ex === ex));
   const prevBest = prevSets.length ? prevSets.reduce((a, s) => (s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a) : null;
-  const prevMax = prevBest ? prevBest.w : -1;
   const firstOfDay = !working((sessions[date] || {}).sets || []).length;
   const s = sessions[date] || { date, sets: [] };
   const set = { day, ex, w, r, note: $("note").value.trim(), t }; if (wu) set.wu = true;
@@ -207,7 +207,8 @@ function saveSet() {
   sessions[date] = next;
   writeSession(date, next);
   const n = working(next.sets.filter(x => x.ex === ex)).length;
-  const isPB = prevMax >= 0 && w > prevMax;
+  // PB: heavier than ever, or more reps at your heaviest weight
+  const isPB = !!prevBest && (w > prevBest.w || (w === prevBest.w && r > prevBest.r));
   toast((isPB ? "New personal best! " : "Saved: ") + ex + " set " + n + " — " + fmtW(w) + " × " + r + offlineNote());
   $("note").value = "";
   renderExercise(true);
@@ -225,11 +226,12 @@ function checkDayDone(date) {
   const sets = working(((sessions[date] || {}).sets || []).filter(s => s.day === day));
   if (!list.every(ex => sets.some(s => s.ex === ex))) return;
   const key = "celeDay_" + date + "_" + day; if (mem.get(key)) return; mem.set(key, "1");
-  // personal bests set today: sets heavier than everything before today
+  // personal bests set today: heavier than before today, or more reps at that top weight
   let pbs = 0;
   list.forEach(ex => {
     const before = working(allSets().filter(s => s.ex === ex && s.date < date)); if (!before.length) return;
-    const top = Math.max(...before.map(s => s.w)); if (sets.some(s => s.ex === ex && s.w > top)) pbs++;
+    const b = before.reduce((a, s) => (s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a);
+    if (sets.some(s => s.ex === ex && (s.w > b.w || (s.w === b.w && s.r > b.r)))) pbs++;
   });
   celebrate("day", { day, exercises: list.length, sets: sets.length, pbs });
 }
@@ -659,20 +661,64 @@ function renderSettings() {
     }
     dl.appendChild(it);
   });
-  // exercise order for the selected day
-  $("orderLbl").textContent = "Exercise order · " + day;
-  const ol = $("exOrder"); ol.innerHTML = ""; const ex = exercisesFor(day);
-  if (!ex.length) ol.appendChild(el("div", "oitem", "No exercises in " + day + " yet."));
-  ex.forEach((n, i) => {
-    const it = el("div", "oitem"), up = el("button", null, "▲"), dn = el("button", null, "▼");
-    up.setAttribute("aria-label", "Move " + n + " up"); dn.setAttribute("aria-label", "Move " + n + " down");
-    up.disabled = i === 0; dn.disabled = i === ex.length - 1;
-    up.onclick = () => moveEx(i, -1); dn.onclick = () => moveEx(i, 1);
-    it.append(el("span", "nm", n), up, dn); ol.appendChild(it);
-  });
 }
 function moveDay(i, dir) { const a = [...days]; [a[i], a[i + dir]] = [a[i + dir], a[i]]; days = a; saveLists(); renderDayBtns(); renderSettings(); }
-function moveEx(i, dir) { const a = exercisesFor(day); [a[i], a[i + dir]] = [a[i + dir], a[i]]; lists = { ...lists, [day]: a }; saveLists(); renderSelect(); renderSettings(); if (tab === "history") renderHistory(); }
+/* ---------- press and hold an exercise button, then drag to reorder ---------- */
+let drag = null, dragJustEnded = false;
+function setupDrag() {
+  const grid = $("exGrid");
+  const end = (commit) => {
+    if (!drag) return; const d = drag; drag = null; clearTimeout(d.timer);
+    document.body.classList.remove("dragging-ex");
+    if (!d.active) return;
+    d.b.classList.remove("lifted"); d.b.style.transform = "";
+    dragJustEnded = true; // swallows the click that follows the drop
+    const order = [...grid.querySelectorAll(".exb[data-ex]")].map(x => x.dataset.ex);
+    const before = exercisesFor(day);
+    if (commit && order.join("\n") !== before.join("\n") && order.length === before.length) {
+      lists = { ...lists, [day]: order }; saveLists(); toast("Order saved." + offlineNote());
+      if (tab === "history") renderHistory();
+    }
+    renderExGrid();
+  };
+  const place = (x, y) => {
+    const d = drag; d.b.style.transform = "";
+    const r = d.b.getBoundingClientRect();
+    d.b.style.transform = "translate(" + (x - d.gx - r.left) + "px," + (y - d.gy - r.top) + "px) scale(1.05)";
+  };
+  grid.addEventListener("pointerdown", e => {
+    dragJustEnded = false;
+    const b = e.target.closest(".exb[data-ex]"); if (!b || e.button > 0) return;
+    const r = b.getBoundingClientRect();
+    drag = { b, id: e.pointerId, sx: e.clientX, sy: e.clientY, gx: e.clientX - r.left, gy: e.clientY - r.top, active: false };
+    drag.timer = setTimeout(() => {
+      if (!drag) return; drag.active = true;
+      b.classList.add("lifted"); document.body.classList.add("dragging-ex");
+      try { b.setPointerCapture(drag.id); } catch (err) {}
+      if (navigator.vibrate) try { navigator.vibrate(25); } catch (err) {}
+    }, 400);
+  });
+  grid.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.active) { if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 10) { clearTimeout(drag.timer); drag = null; } return; }
+    e.preventDefault();
+    const over = [...grid.querySelectorAll(".exb[data-ex]")].find(x => {
+      if (x === drag.b) return false; const q = x.getBoundingClientRect();
+      return e.clientX >= q.left && e.clientX <= q.right && e.clientY >= q.top && e.clientY <= q.bottom;
+    });
+    if (over) {
+      const all = [...grid.querySelectorAll(".exb[data-ex]")];
+      if (all.indexOf(over) > all.indexOf(drag.b)) over.after(drag.b); else over.before(drag.b);
+    }
+    place(e.clientX, e.clientY);
+  });
+  grid.addEventListener("pointerup", () => end(true));
+  grid.addEventListener("pointercancel", () => end(false));
+  grid.addEventListener("contextmenu", e => { if (e.target.closest(".exb")) e.preventDefault(); });
+  // stop the page scrolling while an exercise is being dragged (iPhone needs a non-passive listener)
+  document.addEventListener("touchmove", e => { if (drag && drag.active) e.preventDefault(); }, { passive: false });
+}
+
 function addDay() {
   const n = $("newDay").value.trim(); if (!n) return;
   if (days.some(d => d.toLowerCase() === n.toLowerCase())) { toast("You already have a day called " + n + ".", true); return; }
@@ -1072,6 +1118,10 @@ function wire() {
   };
   $("signout").onclick = () => { closeMenu(); stopRest(); be.signOut(); };
   $("menuOpen").onclick = openMenu; $("menuClose").onclick = closeMenu; $("drawerBackdrop").onclick = closeMenu;
+  setupDrag();
+  // no zooming: block pinch (iPhone gesture events + two-finger moves); double-tap zoom is off via CSS touch-action
+  ["gesturestart", "gesturechange", "gestureend"].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener("touchmove", e => { if (e.touches.length > 1 || (e.scale && e.scale !== 1)) e.preventDefault(); }, { passive: false });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
   // colours
   $("thSave").onclick = saveThemeEdit;
