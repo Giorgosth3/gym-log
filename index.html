@@ -185,7 +185,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 @media (prefers-reduced-motion: no-preference){.save:active{transform:scale(.99)}}
 
 /* ---- tabs ---- */
-#main{padding-bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+#main{padding-bottom:calc(168px + env(safe-area-inset-bottom,0px))}
 .pane{display:flex;flex-direction:column;gap:14px}
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
   display:grid;grid-template-columns:repeat(4,1fr);
@@ -334,7 +334,6 @@ button.chip.copy.copied{border-color:var(--accent)}
 .datewrap input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;padding:0;border:0}
 .datewrap:focus-within{outline:3px solid var(--accent);outline-offset:2px}
 body.resting .brand img{display:none}
-@media (max-width:400px){body.resting .brand h1{display:none}}
 .topbar h1{white-space:nowrap}
 @media (max-width:380px){.topbar h1{font-size:1.45rem}.brand{gap:8px}.hright{gap:4px}}
 /* ---- settings groups ---- */
@@ -390,6 +389,20 @@ input,select,textarea{font-size:max(16px,1em)}
 .exb.lifted{position:relative;z-index:4;box-shadow:0 12px 30px rgba(0,0,0,.45);border-color:var(--accent);transition:none;cursor:grabbing}
 body.dragging-ex{-webkit-user-select:none;user-select:none}
 body.dragging-ex .exgrid{touch-action:none}
+/* help bubble */
+.chatbub{position:fixed;z-index:19;left:calc(100vw - 72px);top:calc(100dvh - 160px);width:60px;height:60px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;background:var(--bub-bg,var(--ink));color:var(--bub-fg,var(--bg));
+  box-shadow:0 8px 22px rgba(0,0,0,.4),0 0 0 2px var(--bg);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none;
+  transition:transform .15s ease}
+.chatbub svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.bubtag{position:absolute;top:-7px;right:-12px;background:var(--bub-tag,var(--accent));color:var(--bub-tag-ink,var(--accent-ink));font:700 .66rem var(--num);letter-spacing:.04em;
+  padding:3px 7px;border-radius:999px;border:2px solid var(--bg);white-space:nowrap;pointer-events:none}
+.chatbub.onleft .bubtag{right:auto;left:-12px}
+.chatbub.snap{transition:left .22s ease,top .22s ease,transform .15s ease}
+.chatbub.holding{transform:scale(.92);transition:transform 1.5s ease}
+.chatbub.lifted{transform:scale(1.12);box-shadow:0 16px 36px rgba(0,0,0,.5),0 0 0 2px var(--bg);cursor:grabbing}
+@media (prefers-reduced-motion:reduce){.chatbub,.chatbub.snap,.chatbub.holding{transition:none}}
+#main[hidden] ~ .chatbub,body.typing .chatbub,body.menu-open .chatbub{display:none}
 /* AI coach chat */
 .chat{position:fixed;left:0;right:0;top:0;height:100dvh;z-index:35;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;max-width:none}
 .chathead{display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 10px) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);flex-shrink:0}
@@ -403,7 +416,7 @@ body.dragging-ex .exgrid{touch-action:none}
 .msg p{margin:0 0 6px}.msg p:last-child{margin:0}
 .msg ol,.msg ul{margin:2px 0 6px;padding-left:20px;display:flex;flex-direction:column;gap:3px}.msg ol:last-child,.msg ul:last-child{margin-bottom:0}
 .msg.ai{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:5px}
-.msg.me{align-self:flex-end;background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:5px}
+.msg.me{align-self:flex-end;background:var(--accent);color:var(--accent-ink);border:1px solid var(--me-border,var(--accent));border-bottom-right-radius:5px}
 .msg.me b{color:inherit}
 .dots{display:inline-flex;gap:4px;padding:4px 0}.dots i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:dot 1s infinite ease-in-out}
 .dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
@@ -415,7 +428,7 @@ body.dragging-ex .exgrid{touch-action:none}
 .grecaptcha-badge{visibility:hidden}
 .chatrow{display:flex;align-items:flex-end;gap:8px}
 #chatIn{flex:1;min-width:0;resize:none;font:500 16px/1.35 var(--body);padding:11px 14px;border-radius:20px;border:1px solid var(--line);background:var(--bg);color:var(--ink);max-height:120px}
-.chatsend{width:44px;height:44px;flex-shrink:0;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.chatsend{width:44px;height:44px;flex-shrink:0;border-radius:50%;border:0;background:var(--send-bg,var(--accent));color:var(--send-ink,var(--accent-ink));display:flex;align-items:center;justify-content:center;cursor:pointer}
 .chatsend svg{width:22px;height:22px}.chatsend:disabled{opacity:.4;cursor:default}
 
 .inapplink{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -459,7 +472,6 @@ body.dragging-ex .exgrid{touch-action:none}
           <button class="timerpill" id="timerPill" hidden aria-haspopup="true" aria-expanded="false" aria-controls="timerMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/></svg><span id="timerTime">1:30</span></button>
           <div class="timermenu" id="timerMenu" hidden><button class="use" id="restMore">+30s</button><button class="use" id="restSkip">Skip</button></div>
         </div>
-        <button class="icon-btn" id="chatOpen" aria-label="Ask the AI coach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
         <label class="datewrap"><span id="dateLbl">Today</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><input type="date" id="date" aria-label="Date"></label>
       </div>
     </header>
@@ -543,6 +555,9 @@ body.dragging-ex .exgrid{touch-action:none}
   </nav>
 
   <!-- Side menu: settings and tools -->
+  <button class="chatbub" id="chatBub" type="button" aria-label="Help: ask the AI coach (press and hold to move)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11"/></svg><span class="bubtag">HELP</span>
+  </button>
   <div class="chat" id="chat" hidden role="dialog" aria-modal="true" aria-labelledby="chatTitle">
     <div class="chathead">
       <button class="icon-btn" id="chatBack" aria-label="Close coach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>

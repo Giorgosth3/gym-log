@@ -44,7 +44,7 @@ const toKg = v => U() === "lbs" ? Math.round(v / KG_LB * 100) / 100 : v;
 const wStep = () => U() === "lbs" ? 5 : 2.5;
 
 /* ---------- screens ---------- */
-function show(which) { ["gate", "loading", "main"].forEach(id => { $(id).hidden = id !== which; }); }
+function show(which) { ["gate", "loading", "main"].forEach(id => { $(id).hidden = id !== which; }); if (which === "main") requestAnimationFrame(() => placeBub(false)); }
 const exercisesFor = d => [...(lists[d] || [])];
 function allSets() { const out = []; Object.values(sessions).forEach(s => (s.sets || []).forEach(x => out.push({ ...x, date: s.date }))); return out; }
 const working = sets => sets.filter(s => !s.wu);
@@ -767,6 +767,86 @@ async function sendChat(text) {
 }
 function autoGrow() { const t = $("chatIn"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 120) + "px"; }
 
+/* ---------- help bubble: tap opens the coach, hold 1.5s to move it ---------- */
+const BUB_HOLD = 1500;
+// any CSS colour -> #rrggbb
+function cssHex(v) {
+  const t = document.createElement("i"); t.style.color = v; document.body.appendChild(t);
+  const m = getComputedStyle(t).color.match(/\d+(\.\d+)?/g) || [0, 0, 0]; t.remove();
+  return rgbHex(m.slice(0, 3).map(Number));
+}
+// Keep the bubble, its HELP tag and the chat readable in every theme (incl. custom ones).
+function bubColors() {
+  if (!document.body) return;
+  const cs = getComputedStyle(document.documentElement), g = k => cssHex(cs.getPropertyValue(k).trim() || "#000");
+  const bg = g("--bg"), ink = g("--ink"), acc = g("--accent"), accInk = g("--accent-ink"), sur = g("--surface");
+  const bw = c => contrast("#ffffff", c) >= contrast("#111111", c) ? "#ffffff" : "#111111";
+  let bub = ink; if (contrast(bub, bg) < 3) bub = contrast(acc, bg) >= 3 ? acc : bw(bg);
+  const fg = contrast(bg, bub) >= 3 ? bg : bw(bub);
+  // tag: accent if it stands out from both the bubble and the page, otherwise page colour on the bubble
+  let tag = acc, tagInk = accInk;
+  if (contrast(acc, bub) < 1.6) { tag = contrast(bg, bub) >= 1.6 ? bg : bw(bub); tagInk = contrast(ink, tag) >= 3 ? ink : bw(tag); }
+  if (contrast(tagInk, tag) < 3) tagInk = bw(tag);
+  const r = document.documentElement.style;
+  r.setProperty("--bub-bg", bub); r.setProperty("--bub-fg", fg); r.setProperty("--bub-tag", tag); r.setProperty("--bub-tag-ink", tagInk);
+  // chat: outline your own messages / send button if the accent blends into the background
+  r.setProperty("--me-border", contrast(acc, bg) < 1.6 ? ink : acc);
+  const send = contrast(acc, sur) >= 1.6 ? acc : ink; r.setProperty("--send-bg", send); r.setProperty("--send-ink", send === acc ? accInk : bw(send));
+}
+function bubBounds() {
+  const b = $("chatBub"), sz = b.offsetWidth || 60, top = document.querySelector(".topbar").getBoundingClientRect().bottom + 10;
+  const tb = document.querySelector(".tabbar").getBoundingClientRect().top - sz - 14;
+  return { sz, minY: Math.min(top, tb), maxY: tb, minX: 12, maxX: innerWidth - sz - 12 };
+}
+function placeBub(anim) {
+  const b = $("chatBub"); if ($("main").hidden || !document.querySelector(".tabbar").getBoundingClientRect().top) return; let pos = null; try { pos = JSON.parse(mem.get("bubPos") || "null"); } catch (e) {}
+  const B = bubBounds(), side = pos && pos.side === "left" ? "left" : "right", f = pos && typeof pos.f === "number" ? Math.max(0, Math.min(1, pos.f)) : 1;
+  b.classList.toggle("snap", !!anim);
+  b.style.left = (side === "left" ? B.minX : B.maxX) + "px"; b.style.top = (B.minY + (B.maxY - B.minY) * f) + "px";
+  b.classList.toggle("onleft", side === "left");
+}
+let bubDrag = null, bubJustMoved = false;
+function setupBubble() {
+  const b = $("chatBub");
+  b.addEventListener("pointerdown", e => {
+    if (e.button > 0) return; bubJustMoved = false;
+    const r = b.getBoundingClientRect();
+    bubDrag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, gx: e.clientX - r.left, gy: e.clientY - r.top, active: false };
+    b.classList.add("holding");
+    bubDrag.timer = setTimeout(() => {
+      if (!bubDrag) return; bubDrag.active = true; b.classList.remove("holding", "snap"); b.classList.add("lifted");
+      try { b.setPointerCapture(bubDrag.id); } catch (err) {}
+      if (navigator.vibrate) try { navigator.vibrate(30); } catch (err) {}
+    }, BUB_HOLD);
+  });
+  b.addEventListener("pointermove", e => {
+    if (!bubDrag || e.pointerId !== bubDrag.id) return;
+    if (!bubDrag.active) { if (Math.hypot(e.clientX - bubDrag.sx, e.clientY - bubDrag.sy) > 10) { clearTimeout(bubDrag.timer); bubDrag = null; b.classList.remove("holding"); } return; }
+    e.preventDefault();
+    const B = bubBounds();
+    b.style.left = Math.max(B.minX, Math.min(B.maxX, e.clientX - bubDrag.gx)) + "px";
+    b.style.top = Math.max(B.minY, Math.min(B.maxY, e.clientY - bubDrag.gy)) + "px";
+  });
+  const end = () => {
+    if (!bubDrag) return; const d = bubDrag; bubDrag = null; clearTimeout(d.timer); b.classList.remove("holding");
+    if (!d.active) return;
+    b.classList.remove("lifted"); bubJustMoved = true;
+    const B = bubBounds(), r = b.getBoundingClientRect(), side = r.left + r.width / 2 < innerWidth / 2 ? "left" : "right";
+    const f = B.maxY > B.minY ? (r.top - B.minY) / (B.maxY - B.minY) : 1;
+    mem.set("bubPos", JSON.stringify({ side, f: Math.round(Math.max(0, Math.min(1, f)) * 1000) / 1000 }));
+    placeBub(true);
+  };
+  b.addEventListener("pointerup", end); b.addEventListener("pointercancel", end);
+  b.addEventListener("contextmenu", e => e.preventDefault());
+  b.addEventListener("click", e => { if (bubJustMoved) { bubJustMoved = false; e.preventDefault(); return; } openChat(); });
+  document.addEventListener("touchmove", e => { if (bubDrag && bubDrag.active) e.preventDefault(); }, { passive: false });
+  addEventListener("resize", () => placeBub(false));
+  // hide while typing (keyboard up)
+  document.addEventListener("focusin", e => { if (e.target.matches("input:not([type=checkbox]):not([type=color]),textarea,select")) document.body.classList.add("typing"); });
+  document.addEventListener("focusout", () => setTimeout(() => { const a = document.activeElement; if (!a || !a.matches("input,textarea,select")) document.body.classList.remove("typing"); }, 50));
+  placeBub(false); bubColors();
+}
+
 /* ---------- press and hold an exercise button, then drag to reorder ---------- */
 let drag = null, dragJustEnded = false;
 function setupDrag() {
@@ -882,6 +962,7 @@ function paintTheme(previewVars) {
   }
   if (vars) { r.setAttribute("data-theme", "custom"); Object.entries(vars).forEach(([k, v]) => r.style.setProperty(k, v)); if (!previewVars) mem.set("themeVars", JSON.stringify(vars)); }
   else if (t === "auto" || t.startsWith("custom:")) r.removeAttribute("data-theme"); else r.setAttribute("data-theme", t);
+  bubColors();
   const bg = getComputedStyle(r).getPropertyValue("--bg").trim();
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => { m.content = (t === "auto" && !vars) ? (m.media.includes("dark") ? "#121518" : "#f7f5f2") : bg; });
 }
@@ -1224,7 +1305,7 @@ function wire() {
   $("menuOpen").onclick = openMenu; $("menuClose").onclick = closeMenu; $("drawerBackdrop").onclick = closeMenu;
   setupDrag();
   // AI coach chat
-  $("chatOpen").onclick = openChat; $("chatBack").onclick = closeChat;
+  setupBubble(); $("chatBack").onclick = closeChat;
   $("chatNew").onclick = () => { if (chatBusy) return; chatMsgs = []; renderChat(); $("chatIn").focus(); };
   $("chatForm").onsubmit = e => { e.preventDefault(); sendChat($("chatIn").value); };
   $("chatIn").oninput = autoGrow;
