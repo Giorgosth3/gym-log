@@ -7,3 +7,6 @@ export const firebaseConfig = {
   messagingSenderId: "150126511236",
   appId: "1:150126511236:web:f7d844df8e9f8b6cae2ed1"
 };
+
+// Fraud Defense (reCAPTCHA Enterprise) site key for Firebase App Check (public by design). Protects the AI coach from abuse.
+export const appCheckSiteKey = "6LdyKAsuAAAAAJPZ5o-ESE4lO5jW1oppU_RmcCK1";

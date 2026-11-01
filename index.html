@@ -334,6 +334,7 @@ button.chip.copy.copied{border-color:var(--accent)}
 .datewrap input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;padding:0;border:0}
 .datewrap:focus-within{outline:3px solid var(--accent);outline-offset:2px}
 body.resting .brand img{display:none}
+@media (max-width:400px){body.resting .brand h1{display:none}}
 .topbar h1{white-space:nowrap}
 @media (max-width:380px){.topbar h1{font-size:1.45rem}.brand{gap:8px}.hright{gap:4px}}
 /* ---- settings groups ---- */
@@ -389,6 +390,33 @@ input,select,textarea{font-size:max(16px,1em)}
 .exb.lifted{position:relative;z-index:4;box-shadow:0 12px 30px rgba(0,0,0,.45);border-color:var(--accent);transition:none;cursor:grabbing}
 body.dragging-ex{-webkit-user-select:none;user-select:none}
 body.dragging-ex .exgrid{touch-action:none}
+/* AI coach chat */
+.chat{position:fixed;left:0;right:0;top:0;height:100dvh;z-index:35;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;max-width:none}
+.chathead{display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 10px) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);flex-shrink:0}
+.chatttl{flex:1;min-width:0;display:flex;flex-direction:column}.chatttl h2{font-size:1.45rem;line-height:1.1}
+.chathead .use{padding:8px 12px;font-size:.85rem}
+.chatmsgs{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px}
+.chatintro{display:flex;flex-direction:column;gap:10px}
+.chatsug{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.chatsug .chip{border:1px solid var(--line);cursor:pointer;color:var(--ink);font:600 .9rem var(--body);text-align:left;padding:9px 13px;border-radius:14px}
+.msg{max-width:86%;padding:10px 13px;border-radius:16px;line-height:1.45;overflow-wrap:anywhere}
+.msg p{margin:0 0 6px}.msg p:last-child{margin:0}
+.msg ol,.msg ul{margin:2px 0 6px;padding-left:20px;display:flex;flex-direction:column;gap:3px}.msg ol:last-child,.msg ul:last-child{margin-bottom:0}
+.msg.ai{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:5px}
+.msg.me{align-self:flex-end;background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:5px}
+.msg.me b{color:inherit}
+.dots{display:inline-flex;gap:4px;padding:4px 0}.dots i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:dot 1s infinite ease-in-out}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){.dots i{animation:none}}
+.chatform{flex-shrink:0;border-top:1px solid var(--line);background:var(--surface);padding:8px max(12px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 10px) max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:6px}
+.chatnote{text-align:center}
+.chatnote.recap{font-size:.7rem;opacity:.8}.chatnote.recap a{color:inherit}
+.grecaptcha-badge{visibility:hidden}
+.chatrow{display:flex;align-items:flex-end;gap:8px}
+#chatIn{flex:1;min-width:0;resize:none;font:500 16px/1.35 var(--body);padding:11px 14px;border-radius:20px;border:1px solid var(--line);background:var(--bg);color:var(--ink);max-height:120px}
+.chatsend{width:44px;height:44px;flex-shrink:0;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.chatsend svg{width:22px;height:22px}.chatsend:disabled{opacity:.4;cursor:default}
 
 .inapplink{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inapplink code{font:500 .85rem var(--num);background:var(--chip);padding:6px 8px;border-radius:8px;overflow-wrap:anywhere;flex:1;min-width:0}
@@ -431,6 +459,7 @@ body.dragging-ex .exgrid{touch-action:none}
           <button class="timerpill" id="timerPill" hidden aria-haspopup="true" aria-expanded="false" aria-controls="timerMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/></svg><span id="timerTime">1:30</span></button>
           <div class="timermenu" id="timerMenu" hidden><button class="use" id="restMore">+30s</button><button class="use" id="restSkip">Skip</button></div>
         </div>
+        <button class="icon-btn" id="chatOpen" aria-label="Ask the AI coach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
         <label class="datewrap"><span id="dateLbl">Today</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><input type="date" id="date" aria-label="Date"></label>
       </div>
     </header>
@@ -514,6 +543,21 @@ body.dragging-ex .exgrid{touch-action:none}
   </nav>
 
   <!-- Side menu: settings and tools -->
+  <div class="chat" id="chat" hidden role="dialog" aria-modal="true" aria-labelledby="chatTitle">
+    <div class="chathead">
+      <button class="icon-btn" id="chatBack" aria-label="Close coach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="chatttl"><h2 id="chatTitle">Coach</h2><span class="small">AI · app &amp; training questions</span></div>
+      <button class="use" id="chatNew" hidden>New chat</button>
+    </div>
+    <div class="chatmsgs" id="chatMsgs" aria-live="polite"></div>
+    <form class="chatform" id="chatForm">
+      <span class="small chatnote" id="chatNote"></span>
+      <span class="small chatnote recap">Protected by reCAPTCHA · Google <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy</a> &amp; <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms</a></span>
+      <div class="chatrow"><textarea id="chatIn" rows="1" placeholder="Ask a question…" aria-label="Your question" maxlength="600"></textarea>
+      <button class="chatsend" id="chatSend" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button></div>
+    </form>
+  </div>
+
   <div class="drawer" id="drawer" aria-hidden="true">
     <div class="drawer-backdrop" id="drawerBackdrop"></div>
     <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">

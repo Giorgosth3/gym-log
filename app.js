@@ -1,4 +1,4 @@
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig, appCheckSiteKey } from "./firebase-config.js";
 import { firebaseBackend, mockBackend } from "./backend.js";
 
 /* ---------- defaults ---------- */
@@ -663,6 +663,110 @@ function renderSettings() {
   });
 }
 function moveDay(i, dir) { const a = [...days]; [a[i], a[i + dir]] = [a[i + dir], a[i]]; days = a; saveLists(); renderDayBtns(); renderSettings(); }
+/* ---------- AI coach chat (Gemini via Firebase AI Logic) ---------- */
+const CHAT_DAILY = 40;           // questions per person per day
+const CHAT_KEEP = 12;            // earlier messages sent along for context
+const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; never invent buttons that are not listed here):
+- Top bar: menu button (☰) opens Settings; the date button (top right) picks the day you're logging; a chat button opens this coach. After saving a set, a rest timer appears at the top: tap it for +30s or Skip.
+- Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders).
+- Bottom tabs: Training, History, Progress, Body.
+- Training tab: exercise buttons for the chosen day. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets; tap one to copy it. "Today so far" lists today's sets; tap a set, then Remove set to delete it.
+- Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
+- Add an exercise: "+ Add exercise" at the end of the exercise buttons. Rename or remove an exercise: History tab, open the exercise, Rename or Remove (renaming also updates past sets).
+- Workout days (add, rename, reorder, remove): Settings → Workout days & exercises.
+- Settings → Training: units kg/lbs, rest timer on/off and length, weekly session target, keep screen on, celebrations on/off. Settings → Colours: themes, including custom ones. Settings → Your data: Export to Excel, import sets from Excel. Settings → Account: sign out.
+- Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
+- Progress tab: Exercises view (estimated 1-rep max chart, personal best, plateau alerts) and Consistency view (calendar, weekly sessions).
+- Body tab: log body weight, 7-day average, weekly rate, goal weight.
+- Wrong day: remove the set, change the date at the top right, save it again.
+- Sync: sign in with the same Google account on any phone; works offline at the gym and syncs later. Each person's data is private.
+- Install: iPhone Safari → Share → Add to Home Screen. Android Chrome → ⋮ → Add to Home screen / Install app.`;
+function coachSystem() {
+  const plan = days.map(d => d + ": " + (exercisesFor(d).join(", ") || "no exercises yet")).join("\n");
+  return `You are the coach inside "Gym Log", a phone app for logging gym sets. Answer only:
+1) questions about using the Gym Log app, and
+2) exercise and training questions: how to do an exercise with good form, sets, reps, progression, warm-ups, rest, training splits, general gym nutrition basics.
+If a question is about anything else, say kindly that you can only help with the app and training.
+Rules: be short and practical (usually under 120 words), use numbered steps for how-to answers, use the user's language (reply in Greek if they write in Greek or Greeklish). Use kg unless they use lbs (their setting: ${U()}). Do not diagnose injuries or give medical advice; for pain, injuries or health conditions tell them to stop and see a doctor or physiotherapist. Never claim the app can do something not described below.
+
+${APP_GUIDE}
+
+This user's workout days and exercises:
+${plan}`;
+}
+let chatMsgs = [], chatBusy = false, chatReturn = null;
+const chatKey = () => "chatCount_" + todayISO();
+function chatLeft() { return CHAT_DAILY - (parseInt(mem.get(chatKey()) || "0", 10) || 0); }
+function esc(t) { return t.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+// tiny, safe markdown: **bold**, numbered and bullet lists, paragraphs
+function mdLite(t) {
+  const lines = esc(t).split("\n"); let out = "", list = null;
+  const close = () => { if (list) { out += "</" + list + ">"; list = null; } };
+  lines.forEach(raw => {
+    const l = raw.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/^#+\s*/, "");
+    let m;
+    if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))) { if (list !== "ol") { close(); out += "<ol>"; list = "ol"; } out += "<li>" + m[1] + "</li>"; }
+    else if ((m = l.match(/^\s*[-*•]\s+(.*)/))) { if (list !== "ul") { close(); out += "<ul>"; list = "ul"; } out += "<li>" + m[1] + "</li>"; }
+    else if (!l.trim()) close();
+    else { close(); out += "<p>" + l + "</p>"; }
+  });
+  close(); return out;
+}
+function openChat() {
+  chatReturn = document.activeElement; $("chat").hidden = false; document.body.classList.add("menu-open");
+  fitChat(); renderChat(); setTimeout(() => $("chatIn").focus({ preventScroll: true }), 60);
+}
+function closeChat() { $("chat").hidden = true; document.body.classList.remove("menu-open"); if (chatReturn && chatReturn.focus) chatReturn.focus(); }
+// keep the input above the phone keyboard
+function fitChat() { const v = window.visualViewport; $("chat").style.height = v ? v.height + "px" : ""; if (v) $("chat").style.top = v.offsetTop + "px"; }
+function chatBubble(role, html) { const d = el("div", "msg " + role); d.innerHTML = html; return d; }
+function renderChat() {
+  const box = $("chatMsgs"); box.innerHTML = "";
+  if (!chatMsgs.length) {
+    const intro = el("div", "chatintro");
+    intro.appendChild(chatBubble("ai", "<p>Hi! Ask me how to use the app, how to do an exercise properly, or anything about training.</p>"));
+    const sug = el("div", "chatsug");
+    const ex = exercisesFor(day)[0];
+    [ex ? "How do I do " + ex + " with good form?" : "How do I do a chest press with good form?", "How do I change the order of my exercises?", "When should I increase the weight?"].forEach(q => {
+      const b = el("button", "chip", q); b.type = "button"; b.onclick = () => sendChat(q); sug.appendChild(b);
+    });
+    intro.appendChild(sug); box.appendChild(intro);
+  }
+  chatMsgs.forEach(m => box.appendChild(chatBubble(m.role === "user" ? "me" : "ai", m.role === "user" ? "<p>" + esc(m.text).replace(/\n/g, "<br>") + "</p>" : mdLite(m.text) + (m.err ? "" : ""))));
+  const left = chatLeft();
+  $("chatNote").textContent = left <= 5 ? (left > 0 ? left + " question" + (left === 1 ? "" : "s") + " left today." : "You've reached today's limit. Back tomorrow!") : "AI answers can be wrong. For pain or injuries, see a professional.";
+  $("chatSend").disabled = chatBusy || left <= 0; $("chatNew").hidden = !chatMsgs.length;
+  box.scrollTop = box.scrollHeight;
+}
+function chatError(e) {
+  const m = String((e && (e.message || e.code)) || e || "").toLowerCase();
+  if (!navigator.onLine) return "You're offline. Connect to the internet to ask the coach.";
+  if (e && e.status === 429 || /429|quota|exhausted|rate/.test(m)) return "The coach is busy right now. Please try again in a minute.";
+  if (/403|disabled|not been used|permission|api key|ai logic/.test(m)) return "The coach isn't switched on yet. (App owner: enable Firebase AI Logic in the Firebase console.)";
+  if (/safety|blocked/.test(m)) return "Sorry, I can't answer that one. Try asking another way.";
+  return "Something went wrong. Please try again.";
+}
+async function sendChat(text) {
+  text = (text || "").trim(); if (!text || chatBusy) return;
+  if (chatLeft() <= 0) { renderChat(); return; }
+  if (!navigator.onLine) { toast("You're offline. Connect to ask the coach.", true); return; }
+  chatBusy = true; $("chatIn").value = ""; autoGrow();
+  const history = chatMsgs.filter(m => !m.err).slice(-CHAT_KEEP);
+  chatMsgs.push({ role: "user", text }); const ans = { role: "model", text: "" }; chatMsgs.push(ans);
+  mem.set(chatKey(), String((parseInt(mem.get(chatKey()) || "0", 10) || 0) + 1));
+  renderChat();
+  const box = $("chatMsgs"), bub = box.lastElementChild; bub.classList.add("typing"); bub.innerHTML = "<span class='dots'><i></i><i></i><i></i></span>";
+  try {
+    const stream = await be.chatStream(history, text, coachSystem());
+    for await (const chunk of stream) { ans.text += chunk; bub.classList.remove("typing"); bub.innerHTML = mdLite(ans.text); box.scrollTop = box.scrollHeight; }
+    if (!ans.text.trim()) throw new Error("empty answer, blocked");
+  } catch (e) {
+    console.warn("coach:", e); ans.text = chatError(e); ans.err = true;
+  }
+  chatBusy = false; renderChat();
+}
+function autoGrow() { const t = $("chatIn"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 120) + "px"; }
+
 /* ---------- press and hold an exercise button, then drag to reorder ---------- */
 let drag = null, dragJustEnded = false;
 function setupDrag() {
@@ -1119,6 +1223,14 @@ function wire() {
   $("signout").onclick = () => { closeMenu(); stopRest(); be.signOut(); };
   $("menuOpen").onclick = openMenu; $("menuClose").onclick = closeMenu; $("drawerBackdrop").onclick = closeMenu;
   setupDrag();
+  // AI coach chat
+  $("chatOpen").onclick = openChat; $("chatBack").onclick = closeChat;
+  $("chatNew").onclick = () => { if (chatBusy) return; chatMsgs = []; renderChat(); $("chatIn").focus(); };
+  $("chatForm").onsubmit = e => { e.preventDefault(); sendChat($("chatIn").value); };
+  $("chatIn").oninput = autoGrow;
+  $("chatIn").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !matchMedia("(pointer:coarse)").matches) { e.preventDefault(); sendChat($("chatIn").value); } };
+  if (window.visualViewport) { visualViewport.addEventListener("resize", () => { if (!$("chat").hidden) { fitChat(); $("chatMsgs").scrollTop = $("chatMsgs").scrollHeight; } }); visualViewport.addEventListener("scroll", () => { if (!$("chat").hidden) fitChat(); }); }
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("chat").hidden) closeChat(); });
   // no zooming: block pinch (iPhone gesture events + two-finger moves); double-tap zoom is off via CSS touch-action
   ["gesturestart", "gesturechange", "gestureend"].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
   document.addEventListener("touchmove", e => { if (e.touches.length > 1 || (e.scale && e.scale !== 1)) e.preventDefault(); }, { passive: false });
@@ -1170,7 +1282,7 @@ async function start() {
     $("gateMsg").textContent = "Setup isn't finished: add your Firebase config to firebase-config.js.";
     return;
   }
-  try { be = mock ? mockBackend() : await firebaseBackend(firebaseConfig); }
+  try { be = mock ? mockBackend() : await firebaseBackend(firebaseConfig, appCheckSiteKey); }
   catch (e) { show("gate"); $("signin").disabled = true; $("gateMsg").textContent = "Couldn't load. Check your connection and reopen the app."; return; }
   be.onUser(u => {
     if (unsub) { unsub(); unsub = null; }
