@@ -178,6 +178,22 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .gate img{width:88px;height:88px;border-radius:20px}
 .gate h1{font-size:2.8rem;line-height:1}
 .gate p{margin:0;color:var(--muted);max-width:34ch}
+.gate{justify-content:flex-start;min-height:auto;padding-top:28px}
+.gatecol{display:flex;flex-direction:column;gap:16px;max-width:440px}
+.gate img{width:64px;height:64px}
+.gate h1{font-size:2.3rem}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.85rem}.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.ef{display:flex;flex-direction:column;gap:10px}
+.ef input{width:100%;font:500 16px var(--body);padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.ef .save{padding:13px}
+.lnk{align-self:flex-start;background:none;border:0;color:var(--accent);font:600 .92rem var(--body);padding:4px 0;cursor:pointer}
+.guest{width:100%;padding:13px;border-radius:12px;border:1px dashed var(--line);background:transparent;color:var(--ink);font:600 1rem var(--body);cursor:pointer}
+.gnote{text-align:center;margin-top:-8px}
+.gate .toast:empty{display:none}
+.gbox{border:1px solid var(--accent);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.gbox b{font-size:1rem}.gbox p{margin:0;color:var(--muted);font-size:.9rem}.gbox .gbtn{padding:11px}.gbox .save{padding:11px}.gbox .toast:empty{display:none}
+.gnag{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface));font-size:.92rem}
+.gnag .btns{display:flex;gap:8px}
 .gbtn{display:flex;align-items:center;justify-content:center;gap:10px;font:600 1.05rem var(--body);padding:14px;border-radius:12px;
   border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
 .gbtn svg{width:20px;height:20px}
@@ -390,16 +406,16 @@ input,select,textarea{font-size:max(16px,1em)}
 body.dragging-ex{-webkit-user-select:none;user-select:none}
 body.dragging-ex .exgrid{touch-action:none}
 /* help bubble */
-.chatbub{position:fixed;z-index:19;left:calc(100vw - 72px);top:calc(100dvh - 160px);width:60px;height:60px;border-radius:50%;border:0;padding:0;cursor:pointer;
+.chatbub{position:fixed;z-index:19;left:calc(100vw - 64px);top:calc(100dvh - 150px);width:52px;height:52px;border-radius:50%;border:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;background:var(--bub-bg,var(--ink));color:var(--bub-fg,var(--bg));
   box-shadow:0 8px 22px rgba(0,0,0,.4),0 0 0 2px var(--bg);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none;
   transition:transform .15s ease}
-.chatbub svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
-.bubtag{position:absolute;top:-7px;right:-12px;background:var(--bub-tag,var(--accent));color:var(--bub-tag-ink,var(--accent-ink));font:700 .66rem var(--num);letter-spacing:.04em;
-  padding:3px 7px;border-radius:999px;border:2px solid var(--bg);white-space:nowrap;pointer-events:none}
-.chatbub.onleft .bubtag{right:auto;left:-12px}
+.chatbub svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.bubtag{position:absolute;top:-8px;right:-13px;background:var(--bub-tag,var(--accent));color:var(--bub-tag-ink,var(--accent-ink));font:700 .6rem var(--num);letter-spacing:.04em;
+  padding:2px 6px;border-radius:999px;border:2px solid var(--bg);white-space:nowrap;pointer-events:none}
+.chatbub.onleft .bubtag{right:auto;left:-13px}
 .chatbub.snap{transition:left .22s ease,top .22s ease,transform .15s ease}
-.chatbub.holding{transform:scale(.92);transition:transform 1.5s ease}
+.chatbub.holding{transform:scale(.92);transition:transform .5s ease}
 .chatbub.lifted{transform:scale(1.12);box-shadow:0 16px 36px rgba(0,0,0,.5),0 0 0 2px var(--bg);cursor:grabbing}
 @media (prefers-reduced-motion:reduce){.chatbub,.chatbub.snap,.chatbub.holding{transition:none}}
 #main[hidden] ~ .chatbub,body.typing .chatbub,body.menu-open .chatbub{display:none}
@@ -438,22 +454,48 @@ body.dragging-ex .exgrid{touch-action:none}
 <body>
 
 <div class="wrap gate" id="gate" hidden>
+ <div id="gateMain" class="gatecol">
   <img src="icons/icon-192.png" alt="">
   <h1>Gym Log</h1>
   <p>Log each set as you go and see exactly what you lifted last time. Your log is private and syncs across your devices.</p>
   <button class="gbtn" id="signin">
     <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
-    Sign in with Google
+    Continue with Google
   </button>
-  <div class="toast err" id="gateMsg" role="status"></div>
   <div class="inapp" id="inapp" hidden>
-    <b>Open this page in your browser to sign in</b>
+    <b>Want to use Google sign-in?</b>
     <p id="inappHow">You're viewing this inside another app, which blocks Google sign-in.</p>
     <a class="save openreal" id="openReal" href="#" hidden>Open in Safari</a>
     <span class="small" id="orLbl" hidden>If that button doesn't work:</span>
     <ol id="inappSteps"></ol>
     <div class="inapplink"><code id="inappUrl"></code><button class="use primary" id="copyLink">Copy link</button></div>
   </div>
+
+  <div class="or">or use email</div>
+  <form class="ef" id="emailForm" novalidate>
+    <div class="seg big" role="group" aria-label="Email sign-in mode"><button type="button" data-em="in" aria-pressed="true">Sign in</button><button type="button" data-em="new" aria-pressed="false">Create account</button></div>
+    <input type="email" id="em" placeholder="Email" aria-label="Email" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email">
+    <input type="password" id="pw" placeholder="Password" aria-label="Password" autocomplete="current-password">
+    <button class="save" id="emailGo" type="submit">Sign in</button>
+    <span class="small" id="emNote" hidden>We'll only use your email to sign you in and to reset your password.</span>
+    <button type="button" class="lnk" id="forgot">Forgot password?</button>
+  </form>
+  <div class="toast err" id="gateMsg" role="status"></div>
+  <div class="or">or</div>
+  <button class="guest" id="guestGo">Continue as guest</button>
+  <span class="small gnote">No account needed. Your log stays on this phone only.</span>
+ </div>
+ <div id="gateReset" class="gatecol" hidden>
+  <img src="icons/icon-192.png" alt="">
+  <h1>Reset password</h1>
+  <p>Enter your email and we'll send you a link to choose a new password.</p>
+  <form class="ef" id="resetForm" novalidate>
+    <input type="email" id="rem" placeholder="Email" aria-label="Email" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email">
+    <button class="save" type="submit" id="resetGo">Send reset link</button>
+  </form>
+  <div class="toast" id="resetMsg" role="status"></div>
+  <button type="button" class="lnk" id="resetBack">← Back to sign in</button>
+ </div>
 </div>
 
 <div class="wrap" id="loading"><div class="empty">Loading…</div></div>
@@ -481,6 +523,7 @@ body.dragging-ex .exgrid{touch-action:none}
   <!-- TRAINING -->
   <section class="pane" id="pane-training" aria-label="Training">
     <div class="awake" id="awakeLine" hidden><i></i>Screen stays on while you train</div>
+    <div class="gnag" id="guestNag" hidden><span><b>Keep your workouts safe.</b> You're a guest, so your log only lives on this phone. Save it to an account.</span><div class="btns"><button class="use primary" id="nagSave">Save</button><button class="use" id="nagLater">Later</button></div></div>
     <div class="exgrid" id="exGrid" role="group" aria-label="Exercises"></div>
     <select id="ex" hidden aria-hidden="true" tabindex="-1"></select>
     <div class="card" id="logCard">
@@ -632,6 +675,18 @@ body.dragging-ex .exgrid{touch-action:none}
       <details class="grp" data-grp="acc">
         <summary><span class="gic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span><span class="gt">Account</span><span class="gsum" id="sumAcc"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
         <div class="gb">
+          <div class="gbox" id="guestBox" hidden>
+            <b>Save your workouts</b>
+            <p>You're using a guest account. If you delete the app or change phone, your log is lost. Save it to an account to keep it. Everything you've logged stays.</p>
+            <button class="save" id="saveEmailOpen">Save with email</button>
+            <form class="ef" id="linkForm" hidden novalidate>
+              <input type="email" id="lem" placeholder="Email" aria-label="Email" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email">
+              <input type="password" id="lpw" placeholder="Password (at least 6 characters)" aria-label="Password" autocomplete="new-password">
+              <button class="save" type="submit" id="linkGo">Save account</button>
+            </form>
+            <button class="gbtn" id="saveGoogle"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg> Save with Google</button>
+            <div class="toast err" id="linkMsg" role="status"></div>
+          </div>
           <span id="who" class="small"></span>
           <button class="ghost danger-ghost" id="signout">Sign out</button>
         </div>

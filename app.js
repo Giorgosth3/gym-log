@@ -767,8 +767,90 @@ async function sendChat(text) {
 }
 function autoGrow() { const t = $("chatIn"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 120) + "px"; }
 
+/* ---------- sign in: Google, email + password, guest ---------- */
+let emMode = "in", me = null;
+function authMsg(e) {
+  const c = e && e.code || "";
+  return ({
+    "auth/invalid-email": "That email doesn't look right.",
+    "auth/missing-email": "Enter your email.",
+    "auth/missing-password": "Enter your password.",
+    "auth/invalid-credential": "Wrong email or password.",
+    "auth/wrong-password": "Wrong email or password.",
+    "auth/user-not-found": "Wrong email or password.",
+    "auth/invalid-login-credentials": "Wrong email or password.",
+    "auth/email-already-in-use": "There's already an account with this email. Sign in instead.",
+    "auth/weak-password": "Password needs at least 6 characters.",
+    "auth/too-many-requests": "Too many tries. Wait a minute and try again.",
+    "auth/network-request-failed": "No connection. Check your internet and try again.",
+    "auth/operation-not-allowed": "This sign-in option isn't switched on yet. (App owner: enable it in Firebase → Authentication.)",
+    "auth/admin-restricted-operation": "Guest sign-in isn't switched on yet. (App owner: enable Anonymous in Firebase → Authentication.)",
+    "auth/credential-already-in-use": "That Google account already has its own Gym Log account. To keep these workouts, save with email instead.",
+    "auth/provider-already-linked": "This account is already saved.",
+    "auth/requires-recent-login": "Please sign in again and retry."
+  })[c] || "That didn't work (" + (c || "unknown error") + "). Try again.";
+}
+function setEmMode(m) {
+  emMode = m;
+  document.querySelectorAll("[data-em]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.em === m)));
+  $("emailGo").textContent = m === "in" ? "Sign in" : "Create account";
+  $("pw").placeholder = m === "in" ? "Password" : "Password (at least 6 characters)";
+  $("pw").autocomplete = m === "in" ? "current-password" : "new-password";
+  $("emNote").hidden = m === "in"; $("forgot").hidden = m !== "in"; $("gateMsg").textContent = "";
+}
+async function busy(btn, fn) { btn.disabled = true; try { await fn(); } finally { btn.disabled = false; } }
+function wireAuth() {
+  document.querySelectorAll("[data-em]").forEach(b => b.onclick = () => setEmMode(b.dataset.em));
+  $("emailForm").onsubmit = e => {
+    e.preventDefault(); $("gateMsg").textContent = "";
+    const em = $("em").value.trim(), pw = $("pw").value;
+    if (!em) { $("gateMsg").textContent = "Enter your email."; $("em").focus(); return; }
+    if (!pw) { $("gateMsg").textContent = "Enter your password."; $("pw").focus(); return; }
+    if (emMode === "new" && pw.length < 6) { $("gateMsg").textContent = "Password needs at least 6 characters."; $("pw").focus(); return; }
+    busy($("emailGo"), async () => { try { await (emMode === "in" ? be.signInEmail(em, pw) : be.createEmail(em, pw)); $("pw").value = ""; } catch (err) { $("gateMsg").textContent = authMsg(err); } });
+  };
+  $("guestGo").onclick = () => { $("gateMsg").textContent = ""; busy($("guestGo"), async () => { try { await be.signInGuest(); } catch (err) { $("gateMsg").textContent = authMsg(err); } }); };
+  $("forgot").onclick = () => { $("gateMain").hidden = true; $("gateReset").hidden = false; $("rem").value = $("em").value.trim(); $("resetMsg").textContent = ""; $("rem").focus(); };
+  $("resetBack").onclick = () => { $("gateReset").hidden = true; $("gateMain").hidden = false; };
+  $("resetForm").onsubmit = e => {
+    e.preventDefault(); const em = $("rem").value.trim(), m = $("resetMsg"); m.classList.remove("err");
+    if (!em) { m.classList.add("err"); m.textContent = "Enter your email."; return; }
+    busy($("resetGo"), async () => {
+      try { await be.resetPassword(em); m.textContent = "If there's an account for " + em + ", a reset link is on its way. Check your inbox (and spam folder)."; }
+      catch (err) { m.classList.add("err"); m.textContent = authMsg(err); }
+    });
+  };
+  // guest → real account
+  $("saveEmailOpen").onclick = () => { $("linkForm").hidden = false; $("saveEmailOpen").hidden = true; $("lem").focus(); };
+  $("linkForm").onsubmit = e => {
+    e.preventDefault(); $("linkMsg").textContent = "";
+    const em = $("lem").value.trim(), pw = $("lpw").value;
+    if (!em) { $("linkMsg").textContent = "Enter your email."; return; }
+    if (pw.length < 6) { $("linkMsg").textContent = "Password needs at least 6 characters."; return; }
+    busy($("linkGo"), async () => { try { setMe(await be.linkEmail(em, pw)); $("lpw").value = ""; toast("Account saved. Sign in with " + em + " on any phone."); } catch (err) { $("linkMsg").textContent = authMsg(err); } });
+  };
+  $("saveGoogle").onclick = () => { $("linkMsg").textContent = ""; busy($("saveGoogle"), async () => {
+    try { setMe(await be.linkGoogle()); toast("Account saved to Google. Sign in with Google on any phone."); }
+    catch (err) { const c = err && err.code || ""; if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") return; $("linkMsg").textContent = authMsg(err); }
+  }); };
+  // guest reminder after 3 workouts
+  $("nagSave").onclick = () => { mem.set("guestNag", "1"); $("guestNag").hidden = true; $("menuOpen").click(); const g = document.querySelector('[data-grp="acc"]'); g.open = true; setTimeout(() => g.scrollIntoView({ block: "start" }), 250); };
+  $("nagLater").onclick = () => { mem.set("guestNag", "1"); $("guestNag").hidden = true; };
+}
+// who is signed in → account box, sign-out warning, reminder
+function setMe(u) {
+  me = u; if (!u) return;
+  $("who").textContent = u.guest ? "Guest account (this phone only)" : "Signed in as " + (u.email || u.name);
+  $("sumAcc").textContent = u.guest ? "Guest" : (u.email || u.name || "");
+  $("guestBox").hidden = !u.guest; $("linkForm").hidden = true; $("saveEmailOpen").hidden = false; $("linkMsg").textContent = "";
+  signoutArmed = false; $("signout").textContent = "Sign out";
+  guestNag();
+}
+function guestNag() { $("guestNag").hidden = !(me && me.guest && !mem.get("guestNag") && trainedDates().size >= 3); }
+let signoutArmed = false;
+
 /* ---------- help bubble: tap opens the coach, hold 1.5s to move it ---------- */
-const BUB_HOLD = 1500;
+const BUB_HOLD = 500;
 // any CSS colour -> #rrggbb
 function cssHex(v) {
   const t = document.createElement("i"); t.style.color = v; document.body.appendChild(t);
@@ -1207,6 +1289,7 @@ function applyDocs(docs) {
   const n = Object.keys(next).length, b = bodyDates().length;
   $("status").textContent = n + " session" + (n === 1 ? "" : "s") + (b ? " and " + b + " weigh-in" + (b === 1 ? "" : "s") : "") + " saved · private to you";
   $("sumData").textContent = n + " session" + (n === 1 ? "" : "s");
+  if (me) guestNag();
 }
 
 /* ---------- wiring ---------- */
@@ -1270,6 +1353,7 @@ function wire() {
   $("newDay").onkeydown = e => { if (e.key === "Enter") addDay(); };
   $("export").onclick = exportExcel;
   $("importFile").onchange = e => { const f = e.target.files[0]; if (f) importExcel(f); e.target.value = ""; };
+  wireAuth();
   $("signin").onclick = async () => {
     $("gateMsg").textContent = "";
     try { await be.signIn(); }
@@ -1301,7 +1385,11 @@ function wire() {
     $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true"); document.body.classList.remove("menu-open");
     $("menuOpen").setAttribute("aria-expanded", "false"); $("menuOpen").focus();
   };
-  $("signout").onclick = () => { closeMenu(); stopRest(); be.signOut(); };
+  $("signout").onclick = () => {
+    // guests lose their log on sign out, so ask twice
+    if (me && me.guest && !signoutArmed) { signoutArmed = true; $("signout").textContent = "Tap again to sign out. Your guest workouts will be deleted"; return; }
+    signoutArmed = false; $("signout").textContent = "Sign out"; closeMenu(); stopRest(); be.signOut();
+  };
   $("menuOpen").onclick = openMenu; $("menuClose").onclick = closeMenu; $("drawerBackdrop").onclick = closeMenu;
   setupDrag();
   // AI coach chat
@@ -1339,10 +1427,10 @@ function inAppBrowser() {
 function showInApp(blocked, appName) {
   const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent), browser = ios ? "Safari" : "Chrome";
   $("inapp").hidden = false;
-  $("inappHow").textContent = appName ? "You opened this inside " + appName + ", which blocks Google sign-in." : "This browser blocked the Google sign-in window.";
+  $("inappHow").textContent = appName ? "You opened this inside " + appName + ", which blocks Google sign-in. Email and guest work here, or open the page in your browser for Google." : "This browser blocked the Google sign-in window.";
   const steps = appName
-    ? ["Tap the <b>⋯</b> or <b>⋮</b> menu at the top of the screen.", "Choose <b>Open in external browser</b> (or <b>Open in " + browser + "</b>).", "Tap <b>Sign in with Google</b> there."]
-    : ["Copy the link below.", "Open <b>" + browser + "</b> and paste it into the address bar.", "Tap <b>Sign in with Google</b> there."];
+    ? ["Tap the <b>⋯</b> or <b>⋮</b> menu at the top of the screen.", "Choose <b>Open in external browser</b> (or <b>Open in " + browser + "</b>).", "Tap <b>Continue with Google</b> there."]
+    : ["Copy the link below.", "Open <b>" + browser + "</b> and paste it into the address bar.", "Tap <b>Continue with Google</b> there."];
   $("inappSteps").innerHTML = steps.map(x => "<li>" + x + "</li>").join("");
   // one-tap jump to the real browser: Chrome via an Android intent, Safari via x-safari-https (iOS 17+)
   const url = location.href.split("#")[0].split("?")[0], btn = $("openReal");
@@ -1367,8 +1455,8 @@ async function start() {
   catch (e) { show("gate"); $("signin").disabled = true; $("gateMsg").textContent = "Couldn't load. Check your connection and reopen the app."; return; }
   be.onUser(u => {
     if (unsub) { unsub(); unsub = null; }
-    if (!u) { uid = null; sessions = {}; days = [...DEFAULT_DAYS]; lists = clone(BASE); prefs = { ...DEFAULT_PREFS }; body = { entries: {} }; show("gate"); return; }
-    uid = u.uid; $("who").textContent = "Signed in as " + (u.email || u.name); $("sumAcc").textContent = u.email || u.name || "";
+    if (!u) { me = null; $("gateReset").hidden = true; $("gateMain").hidden = false; setEmMode("in"); uid = null; sessions = {}; days = [...DEFAULT_DAYS]; lists = clone(BASE); prefs = { ...DEFAULT_PREFS }; body = { entries: {} }; show("gate"); return; }
+    uid = u.uid; setMe(u);
     show("main"); renderTabs(); renderAll();
     unsub = be.subscribe(uid, applyDocs, () => { $("status").textContent = "Lost connection to your log. Reopen the app to reconnect."; });
   });
