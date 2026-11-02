@@ -663,6 +663,17 @@ function renderSettings() {
   });
 }
 function moveDay(i, dir) { const a = [...days]; [a[i], a[i + dir]] = [a[i + dir], a[i]]; days = a; saveLists(); renderDayBtns(); renderSettings(); }
+/* ---------- phone Back button closes the chat / settings instead of leaving the app ---------- */
+const layerClosers = {};
+let ignorePop = 0;
+function pushLayer(name) { try { history.pushState({ layer: name }, ""); } catch (e) {} }
+// closed from inside the app: also remove our history entry, and ignore the popstate that causes
+function popLayer(name) { if (history.state && history.state.layer === name) { ignorePop++; history.back(); } }
+addEventListener("popstate", () => {
+  if (ignorePop > 0) { ignorePop--; return; }
+  const top = history.state && history.state.layer; Object.keys(layerClosers).forEach(n => { if (n !== top) layerClosers[n](); });
+});
+
 /* ---------- AI coach chat (Gemini via Firebase AI Logic) ---------- */
 const CHAT_DAILY = 40;           // questions per person per day
 const CHAT_KEEP = 12;            // earlier messages sent along for context
@@ -713,10 +724,12 @@ function mdLite(t) {
   close(); return out;
 }
 function openChat() {
-  chatReturn = document.activeElement; $("chat").hidden = false; document.body.classList.add("menu-open");
+  chatReturn = document.activeElement; $("chat").hidden = false; document.body.classList.add("menu-open"); pushLayer("chat");
   fitChat(); renderChat(); setTimeout(() => $("chatIn").focus({ preventScroll: true }), 60);
 }
-function closeChat() { $("chat").hidden = true; document.body.classList.remove("menu-open"); if (chatReturn && chatReturn.focus) chatReturn.focus(); }
+function closeChat() { if ($("chat").hidden) return; popLayer("chat"); reallyCloseChat(); }
+function reallyCloseChat() { if ($("chat").hidden) return; $("chat").hidden = true; document.body.classList.remove("menu-open"); if (chatReturn && chatReturn.focus) chatReturn.focus({ preventScroll: true }); }
+layerClosers.chat = reallyCloseChat;
 // keep the input above the phone keyboard
 function fitChat() { const v = window.visualViewport; $("chat").style.height = v ? v.height + "px" : ""; if (v) $("chat").style.top = v.offsetTop + "px"; }
 function chatBubble(role, html) { const d = el("div", "msg " + role); d.innerHTML = html; return d; }
@@ -850,7 +863,7 @@ function guestNag() { $("guestNag").hidden = !(me && me.guest && !mem.get("guest
 let signoutArmed = false;
 
 /* ---------- help bubble: tap opens the coach, hold 1.5s to move it ---------- */
-const BUB_HOLD = 500;
+const BUB_HOLD = 250;
 // any CSS colour -> #rrggbb
 function cssHex(v) {
   const t = document.createElement("i"); t.style.color = v; document.body.appendChild(t);
@@ -1377,8 +1390,15 @@ function wire() {
     renderSettings();
     $("drawer").classList.add("open"); $("drawer").setAttribute("aria-hidden", "false"); document.body.classList.add("menu-open");
     $("menuOpen").setAttribute("aria-expanded", "true"); setTimeout(() => $("menuClose").focus(), 50);
+    pushLayer("menu");
   };
   const closeMenu = () => {
+    if (!$("drawer").classList.contains("open")) return;
+    popLayer("menu");
+    reallyCloseMenu();
+  };
+  layerClosers.menu = () => reallyCloseMenu();
+  const reallyCloseMenu = () => {
     if (!$("drawer").classList.contains("open")) return;
     dayEditing = null;
     if (themeEditing) { themeEditing = null; $("themeEdit").hidden = true; paintTheme(); renderThemes(); }
