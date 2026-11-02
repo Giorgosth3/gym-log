@@ -831,16 +831,20 @@ body.touring .chatbub{z-index:19}
           <div class="addrow" style="margin-top:0"><input type="text" id="newDay" placeholder="New day, e.g. Arms" aria-label="New workout day name"><button class="ghost" id="addDay" style="padding:10px 14px">Add</button></div>
           <span class="small">To change the order of exercises, press and hold an exercise on the Training tab and drag it.</span>
           <button class="ghost" id="changePlan">Change plan</button>
+          <span class="lbl" style="margin-top:6px">Got a code from a friend?</span>
+          <span class="small">Copy their days and exercises into your app.</span>
+          <button class="ghost" id="enterCode">Enter a plan code</button>
           <span class="lbl" style="margin-top:6px">Share my plan</span>
           <div id="shareOff" class="sharebox">
-            <span class="small">Create a code friends can enter to copy your days and exercises. Your weights and history stay private.</span>
-            <button class="ghost" id="shareNew">Create a code</button>
-            <form class="addrow" id="shareCustom" style="margin-top:0" novalidate><input type="text" id="shareCodeIn" placeholder="Or choose your own, e.g. GT3" aria-label="Choose your own plan code" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="14"><button class="ghost" type="submit" style="padding:10px 14px">Use</button></form>
+            <span class="small">Make a code for <b>your own</b> plan, so friends can copy it with "Enter a plan code". Any number of friends can use it. Your weights and history stay private.</span>
+            <button class="ghost" id="shareNew">Make a random code</button>
+            <span class="small">Or pick your own code for your plan:</span>
+            <form class="addrow" id="shareCustom" style="margin-top:0" novalidate><input type="text" id="shareCodeIn" placeholder="e.g. MYPLAN" aria-label="Pick your own code for your plan" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="14"><button class="ghost" type="submit" style="padding:10px 14px">Create</button></form>
           </div>
           <div id="shareOn" class="sharebox" hidden>
-            <div class="codebig"><span class="small">Your plan code</span><b id="shareCode"></b></div>
+            <div class="codebig"><span class="small">Your plan's code. Friends enter it to copy your plan</span><b id="shareCode"></b></div>
             <div class="btns"><button class="use" id="shareCopy">Copy</button><button class="use" id="shareUpdate">Update with my current plan</button></div>
-            <button class="use" id="shareStop">Stop sharing</button>
+            <div class="btns"><button class="use" id="shareChange">Change code</button><button class="use" id="shareStop">Stop sharing</button></div>
           </div>
           <div class="toast" id="shareMsg" role="status"></div>
         </div>

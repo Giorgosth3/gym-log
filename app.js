@@ -964,7 +964,7 @@ async function sharePlan(wanted) {
     if (wanted && (code.length < 3 || code.length > 12)) { msg.textContent = "Use 3 to 12 letters or numbers."; return; }
     for (let i = 0; ; i++) {
       try { await be.claimPlan(uid, code, data); break; }
-      catch (e) { if (e && e.code === "taken") { if (wanted) { msg.textContent = code + " is already taken. Try another code."; return; } if (i > 6) throw e; code = randomCode(); } else throw e; }
+      catch (e) { if (e && e.code === "taken") { if (wanted) { msg.textContent = code + " already belongs to another account, so it can't be your plan's code. To copy that plan instead, tap \"Enter a plan code\" above."; return; } if (i > 6) throw e; code = randomCode(); } else throw e; }
     }
     if (old && old !== code) be.deletePlan(old).catch(() => {});
     prefs = { ...prefs, planCode: code }; savePrefs(); renderShare();
@@ -1940,6 +1940,8 @@ function wire() {
   $("shareCustom").onsubmit = e => { e.preventDefault(); sharePlan($("shareCodeIn").value); };
   $("shareUpdate").onclick = () => sharePlan(prefs.planCode);
   $("shareStop").onclick = () => stopSharing();
+  $("shareChange").onclick = () => { $("shareOn").hidden = true; $("shareOff").hidden = false; $("shareMsg").textContent = ""; $("shareCodeIn").focus(); };
+  $("enterCode").onclick = () => { $("menuClose").click(); setTimeout(() => { openPlan("change"); planGo("code"); }, 320); };
   $("shareCopy").onclick = async () => { try { await navigator.clipboard.writeText(prefs.planCode); $("shareMsg").classList.remove("err"); $("shareMsg").textContent = "Copied " + prefs.planCode + "."; } catch (e) { $("shareMsg").textContent = "Your code is " + prefs.planCode + "."; } };
   $("addClose").onclick = () => closeAdd(); $("addBack").onclick = () => { if (addUI) { addUI.pick = null; addUI.eq = undefined; renderAdd(); } };
   $("addDim").onclick = () => closeAdd();
