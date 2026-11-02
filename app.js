@@ -809,13 +809,106 @@ function showIntro(launch) {
 function closeIntro() {
   clearTimeout(introTimer); const ov = $("intro"); if (ov.hidden) return;
   ov.classList.remove("show"); document.body.classList.remove("intro-open");
-  setTimeout(() => { ov.hidden = true; }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
+  setTimeout(() => { ov.hidden = true; if (tourPending) startTour(); }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
 }
 let introPending = false, hiddenSince = 0, firstDataTimer = null;
 function revealMain() {
   introPending = false; clearTimeout(firstDataTimer);
+  // first-time tour: only for brand-new users (anyone with logged sets already knows the app)
+  if (!prefs.tourDone) { if (allSets().length) { prefs = { ...prefs, tourDone: true }; savePrefs(); } else if (!/[?&]notour\b/.test(location.search)) tourPending = true; }
   showIntro(true); // covers the screen first (if switched on)…
   show("main"); renderTabs(); renderAll(); // …then the main screen is built underneath it
+  if (tourPending && $("intro").hidden) setTimeout(startTour, 300);
+}
+
+/* ---------- guided tour: highlights the real buttons, one step at a time ---------- */
+let tourPending = false, tour = null;
+const TOUR = [
+  { tab: "training", k: "Welcome 👋", t: "Quick tour?", p: "STEPS short steps, about a minute, showing every part of the app. You can replay it any time in Settings → Help.", btn: "Show me", skip: "Skip" },
+  { tab: "training", sel: "#dayBtns", t: "Your workout days", p: "Pick today's workout: Push, Pull, Legs or Shoulders. You can rename them or add your own in Settings." },
+  { tab: "training", sel: "#exGrid", t: "Pick an exercise", p: "Tap the exercise you're doing. \"Last\" shows set 1 from last time. Press and hold a button, then drag, to change the order." },
+  { tab: "training", sel: "#logCard .pair", t: "Weight and reps", p: "Set 1 is filled in from set 1 last time, so you can match or beat it. Set 2 copies the set you just did. Adjust with − and +." },
+  { tab: "training", sel: "#save", t: "Save the set", p: "Tap Save set. A rest timer starts at the top. Tap it for +30s or Skip. Beat your best and you'll get a personal-best celebration 🏆" },
+  { tab: "training", sel: "#todayBox", t: "Today so far", p: "Your sets for today appear here. Saved one by mistake? Tap it, then Remove set." },
+  { tab: "training", sel: ".datewrap", t: "Logging another day?", p: "Tap the date to log or view sets on a different day, e.g. if you forgot to log yesterday." },
+  { tab: "history", sel: "#history .ex-card", t: "History", p: "Every exercise with all your past sessions. Open one to see the sets, rename it or remove it." },
+  { tab: "progress", pview: "ex", sel: "#pvEx", t: "Progress: exercises", p: "Pick an exercise to see your strength trend, your personal best and a warning if you've stopped improving." },
+  { tab: "progress", pview: "cons", sel: "#pvCons", t: "Progress: consistency", p: "A calendar of the days you trained and how many workouts you did each week against your target." },
+  { tab: "body", sel: "#pane-body .card", t: "Body weight", p: "Log your weight and set a goal. The 7-day average smooths out daily ups and downs. Hit your goal and you'll get a celebration." },
+  { tab: "training", sel: "#chatBub", round: true, t: "Ask the coach", p: "Tap HELP to ask how to use the app or how to do an exercise. Press and hold it to move it out of the way." },
+  { tab: "training", sel: "#menuOpen", t: "Settings", p: "Your days & exercises, units, rest timer, weekly target, colours, intro, account and Excel export. This tour is in there too." },
+  { tab: "training", k: "All set ✅", t: "Go lift!", p: "Log your first set and start your streak. Tap HELP if you get stuck.", btn: "Start", skip: "" }
+];
+const tourVisible = sel => { const e = document.querySelector(sel); if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+function startTour() {
+  tourPending = false; if (tour || $("main").hidden) return;
+  if ($("drawer").classList.contains("open")) $("menuClose").click();
+  tour = { i: 0 };
+  tourPrep(TOUR[1]); tour.skip = TOUR.map(st => !!st.sel && st.sel === "#todayBox" && !tourVisible(st.sel)); // steps hidden for this person
+  const blk = el("div", "tblock"), hole = el("div", "thole"), tip = el("div", "ttip");
+  tip.setAttribute("role", "dialog"); tip.setAttribute("aria-live", "polite");
+  blk.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
+  blk.addEventListener("wheel", e => e.preventDefault(), { passive: false });
+  document.body.append(blk, hole, tip); tour.els = { blk, hole, tip };
+  document.body.classList.add("touring"); pushLayer("tour");
+  addEventListener("resize", placeTour);
+  tourStep(0);
+}
+// tab, view and exercise the step needs, then measure
+function tourPrep(st) {
+  if (tab !== st.tab) setTab(st.tab);
+  if (st.pview) { const b = document.querySelector('[data-pview="' + st.pview + '"]'); if (b && b.getAttribute("aria-pressed") !== "true") b.click(); }
+  if (st.tab === "training" && !$("ex").value && namesFor(day).length) pickEx(namesFor(day)[0]);
+}
+function tourStep(i) {
+  if (!tour) return;
+  // skip steps whose button isn't on screen for this person (e.g. "Today so far" before the first set)
+  while (i > 0 && i < TOUR.length - 1) { if (!tour.skip[i]) { tourPrep(TOUR[i]); if (tourVisible(TOUR[i].sel)) break; } i++; }
+  tour.i = i; const st = TOUR[i]; tourPrep(st);
+  const skipped = j => tour.skip[j], n = TOUR.length - 2 - tour.skip.filter(Boolean).length;
+  let idx = 0; for (let j = 1; j <= i; j++) if (!skipped(j)) idx++;
+  const { tip } = tour.els; tip.innerHTML = "";
+  tip.appendChild(el("span", "tk", st.k || "Step " + idx + " of " + n));
+  const b = el("b", st.sel ? null : "tbig", st.t); tip.appendChild(b);
+  tip.appendChild(el("p", null, st.p.replace("STEPS", String(n))));
+  const row = el("div", "tr"), dots = el("div", "tdots");
+  if (st.sel) for (let j = 1; j <= n; j++) dots.appendChild(el("i", j === idx ? "on" : null));
+  if (st.skip !== "") { const sk = el("button", "tskip", st.skip || "Skip tour"); sk.type = "button"; sk.onclick = () => endTour(); row.appendChild(sk); } else row.appendChild(el("span"));
+  row.appendChild(dots);
+  const nx = el("button", "tnext", st.btn || (i === TOUR.length - 2 ? "Finish" : "Next")); nx.type = "button";
+  nx.onclick = () => { if (i >= TOUR.length - 1) endTour(); else tourStep(i + 1); };
+  row.appendChild(nx); tip.appendChild(row);
+  // bring the target into view (things in the top bar, tab bar or the bubble never scroll)
+  if (st.sel) {
+    const e = document.querySelector(st.sel), fixed = e.closest(".topbar,.tabbar") || e.id === "chatBub";
+    if (!fixed) { const tb = document.querySelector(".topbar").getBoundingClientRect().bottom; window.scrollBy({ top: e.getBoundingClientRect().top - tb - 14, behavior: "instant" }); }
+  } else window.scrollTo({ top: 0, behavior: "instant" });
+  requestAnimationFrame(placeTour); setTimeout(() => nx.focus({ preventScroll: true }), 30);
+}
+function placeTour() {
+  if (!tour) return;
+  const st = TOUR[tour.i], { hole, tip } = tour.els, H = innerHeight, th = tip.offsetHeight;
+  tip.style.top = tip.style.bottom = ""; tip.classList.toggle("center", !st.sel);
+  if (!st.sel) { Object.assign(hole.style, { left: "50%", top: "50%", width: "0px", height: "0px" }); hole.classList.add("none"); tip.style.top = Math.max(16, (H - th) / 2) + "px"; return; }
+  hole.classList.remove("none");
+  const r = document.querySelector(st.sel).getBoundingClientRect(), pad = 6;
+  const top = Math.max(r.top - pad, 6), bot = Math.min(r.bottom + pad, H - 6);
+  Object.assign(hole.style, { left: (r.left - pad) + "px", top: top + "px", width: (r.width + pad * 2) + "px", height: Math.max(bot - top, 20) + "px", borderRadius: st.round ? "50%" : "14px" });
+  if (H - bot - 14 >= th + 70) tip.style.top = (bot + 14) + "px";
+  else if (top - 14 >= th + 6) tip.style.top = (top - 14 - th) + "px";
+  else {
+    // target taller than the screen: card near the bottom, highlight trimmed to stop above it
+    const tt = Math.max(10, H - th - 96); tip.style.top = tt + "px";
+    if (bot > tt - 10) hole.style.height = Math.max(tt - 12 - top, 40) + "px";
+  }
+}
+function endTour() {
+  if (!tour) return;
+  Object.values(tour.els).forEach(x => x.remove()); tour = null;
+  document.body.classList.remove("touring"); removeEventListener("resize", placeTour);
+  popLayer("tour");
+  if (!prefs.tourDone) { prefs = { ...prefs, tourDone: true }; savePrefs(); }
+  setTab("training"); window.scrollTo(0, 0);
 }
 // show on every launch, and when coming back to the app after 30+ minutes away
 document.addEventListener("visibilitychange", () => {
@@ -824,7 +917,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ---------- phone Back button closes the chat / settings instead of leaving the app ---------- */
-const layerClosers = {};
+const layerClosers = { tour: () => endTour() };
 let ignorePop = 0;
 function pushLayer(name) { try { history.pushState({ layer: name }, ""); } catch (e) {} }
 // closed from inside the app: also remove our history entry, and ignore the popstate that causes
@@ -1465,6 +1558,7 @@ function applyDocs(docs) {
   $("sumData").textContent = n + " session" + (n === 1 ? "" : "s");
   if (me) guestNag();
   if (introPending) revealMain();
+  if (tour) requestAnimationFrame(placeTour);
 }
 
 /* ---------- wiring ---------- */
@@ -1512,6 +1606,7 @@ function wire() {
   $("weekDown").onclick = () => prefAdj("weekTarget", -1, 1, 7); $("weekUp").onclick = () => prefAdj("weekTarget", 1, 1, 7);
   $("awakeOn").onchange = () => { prefs = { ...prefs, keepAwake: $("awakeOn").checked }; savePrefs(); syncWake(); };
   $("celeOn").onchange = () => { prefs = { ...prefs, celebrate: $("celeOn").checked }; savePrefs(); };
+  $("tourAgain").onclick = () => { $("menuClose").click(); setTimeout(startTour, 350); };
   $("introOn").onchange = () => { prefs = { ...prefs, intro: $("introOn").checked }; savePrefs(); renderSettings(); };
   document.querySelectorAll("[data-ip]").forEach(b => b.onclick = () => { prefs = { ...prefs, introPeriod: b.dataset.ip }; savePrefs(); renderSettings(); });
   $("intro").onclick = e => { if (e.target.closest(".iweek")) { stopIntroTimer(); return; } closeIntro(); };

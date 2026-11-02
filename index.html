@@ -464,6 +464,20 @@ body.dragging-ex .exgrid{touch-action:none}
 body.intro-open .chatbub{display:none}
 .srow.col{flex-direction:column;align-items:stretch;gap:8px}
 .srow[hidden]{display:none}
+/* guided tour */
+.tblock{position:fixed;inset:0;z-index:69;background:transparent;touch-action:none}
+.thole{position:fixed;z-index:70;border-radius:14px;box-shadow:0 0 0 200vmax rgba(0,0,0,.72);outline:2px solid var(--accent);outline-offset:2px;pointer-events:none;transition:all .25s ease}
+.thole.none{outline:none}
+.ttip{position:fixed;left:16px;right:16px;max-width:440px;margin:0 auto;z-index:71;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:9px;box-shadow:0 14px 40px rgba(0,0,0,.5)}
+.ttip .tk{font:700 .72rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.ttip b{font:700 1.15rem var(--body)}.ttip b.tbig{font:700 2.1rem/1 var(--display);text-transform:uppercase}
+.ttip p{margin:0;color:var(--muted);font-size:.95rem}
+.ttip .tr{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+.tskip{background:none;border:0;color:var(--muted);font:600 .95rem var(--body);padding:8px 4px;cursor:pointer}
+.tnext{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:10px 20px;font:700 1rem var(--body);cursor:pointer}
+.tdots{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}.tdots i{width:6px;height:6px;border-radius:3px;background:var(--line)}.tdots i.on{width:16px;background:var(--accent)}
+@media (prefers-reduced-motion:reduce){.thole{transition:none}}
+body.touring .chatbub{z-index:19}
 /* help bubble */
 .chatbub{position:fixed;z-index:19;left:calc(100vw - 64px);top:calc(100dvh - 150px);width:52px;height:52px;border-radius:50%;border:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;background:var(--bub-bg,var(--ink));color:var(--bub-fg,var(--bg));
@@ -738,6 +752,14 @@ body.intro-open .chatbub{display:none}
             <input type="file" id="importFile" accept=".xlsx,.xls,.csv" aria-label="Excel file to import">
           </details>
           <div class="status" id="status"></div>
+        </div>
+      </details>
+      <details class="grp" data-grp="help">
+        <summary><span class="gic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><circle cx="12" cy="17.2" r=".6"/></svg></span><span class="gt">Help</span><span class="gsum"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+        <div class="gb">
+          <span class="small">A one-minute walk-through of every part of the app.</span>
+          <button class="ghost" id="tourAgain">Show the tour again</button>
+          <span class="small">Questions? Tap the HELP bubble to ask the coach.</span>
         </div>
       </details>
       <details class="grp" data-grp="acc">
