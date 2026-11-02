@@ -168,13 +168,8 @@ function renderHint() {
   if (!ex) return;
   const last = lastSession(ex);
   if (!last) { h.textContent = "No earlier sets for this one yet."; return; }
-  h.appendChild(el("span", null, "Last time · " + shortDate(last.date) + " (tap to copy):"));
-  last.sets.forEach(s => {
-    const b = el("button", "chip copy", fmtW(s.w) + " × " + s.r); b.type = "button";
-    b.setAttribute("aria-label", "Copy " + fmtW(s.w) + " × " + s.r);
-    b.onclick = () => { $("w").value = trim(disp(s.w)); $("r").value = String(s.r); h.querySelectorAll(".copied").forEach(x => x.classList.remove("copied")); b.classList.add("copied"); $("filledNote").hidden = true; };
-    h.appendChild(b);
-  });
+  h.appendChild(el("span", null, "Last time · " + shortDate(last.date) + ":"));
+  last.sets.forEach(s => h.appendChild(el("span", "chip", fmtW(s.w) + " × " + s.r)));
 }
 function renderToday() {
   const ex = $("ex").value, cur = $("date").value;
@@ -752,7 +747,37 @@ function weekStreak() {
   const doneNow = thisCount >= T;
   return { streak: n + (doneNow ? 1 : 0), prev: n, thisCount, T, doneNow, thisMon, wd };
 }
-let introTimer = null, introShownAt = 0;
+let introTimer = null, introShownAt = 0, introWeek = null;
+// the week box in the intro: ‹ › (or swipe) to look at earlier weeks
+function renderIntroWeek() {
+  const { off, st, wkc, first } = introWeek; wkc.innerHTML = "";
+  const mon = new Date(st.thisMon); mon.setDate(mon.getDate() - 7 * off);
+  const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+  let count = 0; const row = el("div", "wdays");
+  ["M", "T", "W", "T", "F", "S", "S"].forEach((d, i) => {
+    const x = new Date(mon); x.setDate(x.getDate() + i); const iso = isoOf(x), on = st.wd.has(iso); if (on) count++;
+    row.appendChild(el("span", on ? "on" : (iso === todayISO() ? "today" : null), d));
+  });
+  const prev = el("button", "wnav", "‹"), next = el("button", "wnav", "›");
+  prev.type = next.type = "button"; prev.setAttribute("aria-label", "Previous week"); next.setAttribute("aria-label", "Next week");
+  prev.disabled = isoOf(mon) <= first || off >= 104; next.disabled = off === 0;
+  prev.onclick = e => { e.stopPropagation(); introWeekGo(1); }; next.onclick = e => { e.stopPropagation(); introWeekGo(-1); };
+  const title = off === 0 ? "This week" : off === 1 ? "Last week" : shortDate(isoOf(mon)) + " – " + shortDate(isoOf(sun));
+  const head = el("div", "iwhead"); head.append(prev, el("span", "k", title + " · " + count + " of " + st.T), next);
+  let note;
+  if (off === 0) { const left = st.T - count; note = count >= st.T ? "Target hit this week ✓" : left + " more " + (st.prev > 0 ? "to keep it going" : "to start your streak"); }
+  else note = count >= st.T ? "Target hit ✓" : "Missed the target by " + (st.T - count);
+  wkc.append(head, row, el("span", "imuted small " + (off && count < st.T ? "miss" : ""), note));
+}
+function introWeekGo(d) {
+  const w = introWeek; if (!w) return;
+  const n = w.off + d; if (n < 0) return;
+  const mon = new Date(w.st.thisMon); mon.setDate(mon.getDate() - 7 * n); const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+  if (d > 0 && (isoOf(sun) < w.first || n > 104)) return;
+  w.off = n; renderIntroWeek(); stopIntroTimer();
+}
+// once you start browsing weeks, the intro stays until you tap
+function stopIntroTimer() { clearTimeout(introTimer); $("intro").classList.add("paused"); }
 function showIntro(launch) {
   if (prefs.intro === false || (!launch && $("main").hidden)) return;
   if (/[?&]mock\b/.test(location.search) && /[?&]nointro\b/.test(location.search)) return; // automated tests only
@@ -773,16 +798,13 @@ function showIntro(launch) {
   const grid = el("div", "istats"), stat = (v, l, cls) => { const c = el("div", "card istat"); c.append(el("b", cls || null, String(v)), el("span", null, l)); return c; };
   grid.append(stat(workouts, (workouts === 1 ? "workout " : "workouts ") + PERIODS[p]), stat(pbs, (pbs === 1 ? "personal best " : "personal bests ") + PERIODS[p] + " 🏆", "gold"));
   box.appendChild(grid);
-  const wkc = el("div", "card iweek"), lb = el("span", "k", "This week · " + st.thisCount + " of " + st.T), row = el("div", "wdays");
-  ["M", "T", "W", "T", "F", "S", "S"].forEach((d, i) => { const x = new Date(st.thisMon); x.setDate(x.getDate() + i); const iso = isoOf(x); const sp = el("span", st.wd.has(iso) ? "on" : (iso === todayISO() ? "today" : null), d); row.appendChild(sp); });
-  const left = st.T - st.thisCount;
-  const note = st.doneNow ? "Target hit this week ✓" : left + " more " + (st.prev > 0 ? "to keep it going" : "to start your streak");
-  wkc.append(lb, row, el("span", "imuted small", note)); box.appendChild(wkc);
+  const wkc = el("div", "card iweek"); box.appendChild(wkc);
+  introWeek = { off: 0, st, wkc, first: [...st.wd].sort()[0] || todayISO() };
+  renderIntroWeek();
   box.appendChild(el("span", "imuted small", "Tap anywhere to start"));
-  const ov = $("intro"); ov.hidden = false; document.body.classList.add("intro-open"); introShownAt = Date.now();
+  const ov = $("intro"); ov.hidden = false; ov.classList.remove("paused"); document.body.classList.add("intro-open"); introShownAt = Date.now();
   if (launch) { ov.classList.add("instant", "show"); requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.remove("instant"))); }
   else requestAnimationFrame(() => ov.classList.add("show"));
-  clearTimeout(introTimer); introTimer = setTimeout(closeIntro, 4000);
 }
 function closeIntro() {
   clearTimeout(introTimer); const ov = $("intro"); if (ov.hidden) return;
@@ -819,7 +841,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Top bar: menu button (☰) opens Settings; the date button (top right) picks the day you're logging; a chat button opens this coach. After saving a set, a rest timer appears at the top: tap it for +30s or Skip.
 - Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders).
 - Bottom tabs: Training, History, Progress, Body.
-- Training tab: exercise buttons for the chosen day. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets; tap one to copy it. "Today so far" lists today's sets; tap a set, then Remove set to delete it.
+- Training tab: exercise buttons for the chosen day. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
 - Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
 - Add an exercise: "+ Add exercise" at the end of the exercise buttons. Rename or remove an exercise: History tab, open the exercise, Rename or Remove (renaming also updates past sets).
 - Workout days (add, rename, reorder, remove): Settings → Workout days & exercises.
@@ -1492,8 +1514,19 @@ function wire() {
   $("celeOn").onchange = () => { prefs = { ...prefs, celebrate: $("celeOn").checked }; savePrefs(); };
   $("introOn").onchange = () => { prefs = { ...prefs, intro: $("introOn").checked }; savePrefs(); renderSettings(); };
   document.querySelectorAll("[data-ip]").forEach(b => b.onclick = () => { prefs = { ...prefs, introPeriod: b.dataset.ip }; savePrefs(); renderSettings(); });
-  $("intro").onclick = closeIntro;
-  document.addEventListener("keydown", e => { if (!$("intro").hidden && (e.key === "Escape" || e.key === "Enter" || e.key === " ")) { e.preventDefault(); closeIntro(); } });
+  $("intro").onclick = e => { if (e.target.closest(".iweek")) { stopIntroTimer(); return; } closeIntro(); };
+  let sx = null, sy = null;
+  $("intro").addEventListener("touchstart", e => { const c = e.target.closest(".iweek"); sx = c ? e.touches[0].clientX : null; sy = c ? e.touches[0].clientY : null; }, { passive: true });
+  $("intro").addEventListener("touchend", e => {
+    if (sx == null) return; const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) introWeekGo(dx > 0 ? 1 : -1);
+  }, { passive: true });
+  document.addEventListener("keydown", e => {
+    if ($("intro").hidden) return;
+    if (e.key === "ArrowLeft") { e.preventDefault(); introWeekGo(1); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); introWeekGo(-1); }
+    else if (e.key === "Escape" || ((e.key === "Enter" || e.key === " ") && !e.target.closest(".wnav"))) { e.preventDefault(); closeIntro(); }
+  });
   $("cele").addEventListener("click", e => { if (!e.target.closest(".cbtn")) closeCele(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("cele").hidden) closeCele(); });
   const restAdj = d => { prefs = { ...prefs, restSec: Math.min(600, Math.max(15, prefs.restSec + d)) }; $("restSecLbl").textContent = fmtSec(prefs.restSec); savePrefs(); };

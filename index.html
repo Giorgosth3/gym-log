@@ -448,6 +448,12 @@ body.dragging-ex .exgrid{touch-action:none}
 @media (prefers-color-scheme: light){:root:not([data-theme]) .istat b.gold{color:#b7791f}}
 .iweek{width:100%;gap:8px;text-align:left}
 .iweek .k{font:700 .75rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.iwhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wnav{width:36px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--chip);color:var(--ink);font:700 1.2rem/1 var(--body);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.wnav:disabled{opacity:.3;cursor:default}
+.imuted.miss{color:var(--danger,#e5484d)}
+.intro.paused .ibar{visibility:hidden}
+.iweek{cursor:default;touch-action:pan-y}
 .wdays{display:flex;gap:6px}.wdays span{flex:1;max-width:40px;height:34px;border-radius:9px;background:var(--chip);display:flex;align-items:center;justify-content:center;font:600 .8rem var(--num);color:var(--muted)}
 .wdays span.on{background:var(--accent);color:var(--accent-ink)}.wdays span.today{box-shadow:inset 0 0 0 2px var(--accent)}
 .ibar{position:absolute;left:24px;right:24px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);height:3px;border-radius:2px;background:var(--chip);overflow:hidden;max-width:400px;margin:0 auto}
@@ -657,7 +663,6 @@ body.intro-open .chatbub{display:none}
   <!-- Side menu: settings and tools -->
   <div class="intro" id="intro" hidden role="dialog" aria-modal="true" aria-label="Your week so far. Tap to start">
     <div class="introbody" id="introBody"></div>
-    <div class="ibar"><i></i></div>
   </div>
   <button class="chatbub" id="chatBub" type="button" aria-label="Help: ask the AI coach (press and hold to move)">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11"/></svg><span class="bubtag">HELP</span>
