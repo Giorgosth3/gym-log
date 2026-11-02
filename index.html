@@ -263,6 +263,20 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .oitem .nm{flex:1;min-width:0;overflow-wrap:anywhere}
 .oitem button{background:var(--chip);border:1px solid var(--line);color:var(--ink);border-radius:8px;min-width:32px;height:32px;cursor:pointer;font:600 .8rem var(--body);padding:0 8px}
 .oitem button:disabled{opacity:.35;cursor:default}
+.oitem .daytog{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:none;border:0;height:auto;padding:6px 0;text-align:left;font:600 .95rem var(--body);color:var(--ink);justify-content:flex-start}
+.daytog .chev2{color:var(--muted);width:12px}
+.daytog span:nth-child(2){overflow-wrap:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.daytog small{flex-shrink:0}
+.oitem button{font-size:.95rem}
+.daytog small{background:var(--chip);color:var(--muted);border-radius:999px;padding:1px 8px;font:600 .72rem var(--num)}
+.dayex{background:var(--bg);border-top:1px solid var(--line)}
+.oitem.sub{padding-left:32px}
+.oitem.sub.none{color:var(--muted)}
+.oitem.armed{background:color-mix(in srgb,var(--danger) 10%,transparent)}
+.oitem.armed{flex-wrap:wrap}.oitem.armed .nm{color:var(--ink);font-size:.9rem;flex-basis:100%}.oitem.armed button{flex:1}
+.dayord button{flex:1}
+.oitem button.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.oitem.addex input{border-color:var(--line);background:var(--surface)}
 .oitem input{flex:1;min-width:0;font:500 .95rem var(--body);padding:6px 8px;border-radius:8px;border:1px solid var(--accent);background:var(--bg);color:var(--ink)}
 .goalrow{display:grid;grid-template-columns:1fr auto auto;gap:6px}
 .goalrow input{font:600 1rem var(--num);padding:9px 10px}

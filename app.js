@@ -655,15 +655,64 @@ function renderSettings() {
       inp.onkeydown = e => { if (e.key === "Enter") ok.click(); if (e.key === "Escape") no.click(); };
       it.append(inp, ok, no); setTimeout(() => inp.focus(), 0);
     } else {
-      const up = el("button", null, "▲"), dn = el("button", null, "▼"), ren = el("button", null, "Rename"), rm = el("button", null, "✕");
-      up.setAttribute("aria-label", "Move " + d + " up"); dn.setAttribute("aria-label", "Move " + d + " down"); rm.setAttribute("aria-label", "Remove " + d);
+      const up = el("button", null, "▲"), dn = el("button", null, "▼"), ren = el("button", null, "✎"), rm = el("button", null, "✕");
+      up.setAttribute("aria-label", "Move " + d + " up"); dn.setAttribute("aria-label", "Move " + d + " down"); rm.setAttribute("aria-label", "Remove " + d); ren.setAttribute("aria-label", "Rename " + d);
       up.disabled = i === 0; dn.disabled = i === days.length - 1;
       up.onclick = () => moveDay(i, -1); dn.onclick = () => moveDay(i, 1);
       ren.onclick = () => { dayEditing = d; renderSettings(); }; rm.onclick = () => removeDay(d);
-      it.append(el("span", "nm", d), up, dn, ren, rm);
+      // tap the day to show its exercises
+      const open = dayOpen === d, nm = el("button", "nm daytog");
+      nm.setAttribute("aria-expanded", String(open));
+      nm.append(el("span", "chev2", open ? "▾" : "▸"), el("span", null, d), el("small", null, exercisesFor(d).length + ""));
+      nm.onclick = () => { dayOpen = open ? null : d; exEditing = null; exArmed = null; renderSettings(); };
+      it.append(nm, ren, rm);
+      dl.appendChild(it);
+      if (open) {
+        const box = dayExercises(d), ord = el("div", "oitem sub dayord");
+        up.textContent = "▲ Move up"; dn.textContent = "▼ Move down";
+        ord.append(up, dn); box.insertBefore(ord, box.firstChild);
+        dl.appendChild(box);
+      }
+      return;
     }
     dl.appendChild(it);
   });
+}
+/* exercises of a workout day, inside Settings: rename, remove, add */
+let dayOpen = null, exEditing = null, exArmed = null;
+function dayExercises(d) {
+  const box = el("div", "dayex"), list = exercisesFor(d);
+  if (!list.length) box.appendChild(el("div", "oitem sub none", "No exercises in " + d + " yet."));
+  list.forEach(ex => {
+    const it = el("div", "oitem sub"), key = d + "|" + ex;
+    if (exEditing === key) {
+      const inp = el("input"); inp.type = "text"; inp.value = ex; inp.setAttribute("aria-label", "New name for " + ex);
+      const ok = el("button", null, "Save"), no = el("button", null, "✕"); no.setAttribute("aria-label", "Cancel");
+      ok.onclick = () => { exEditing = null; renameExercise(d, ex, inp.value); renderSettings(); };
+      no.onclick = () => { exEditing = null; renderSettings(); };
+      inp.onkeydown = e => { if (e.key === "Enter") ok.click(); if (e.key === "Escape") no.click(); };
+      it.append(inp, ok, no); setTimeout(() => { inp.focus(); inp.select(); }, 0);
+    } else if (exArmed === key) {
+      const n = allSets().filter(x => x.ex === ex && x.day === d).length;
+      const yes = el("button", "danger", "Remove"), no = el("button", null, "Cancel");
+      yes.onclick = () => { exArmed = null; removeExercise(d, ex); };
+      no.onclick = () => { exArmed = null; renderSettings(); };
+      it.classList.add("armed");
+      it.append(el("span", "nm", "Remove " + ex + (n ? " and its " + n + " logged set" + (n > 1 ? "s" : "") : "") + "?"), yes, no);
+    } else {
+      const ren = el("button", null, "✎"), rm = el("button", null, "✕"); rm.setAttribute("aria-label", "Remove " + ex); ren.setAttribute("aria-label", "Rename " + ex);
+      ren.onclick = () => { exEditing = key; exArmed = null; renderSettings(); };
+      rm.onclick = () => { exArmed = key; exEditing = null; renderSettings(); };
+      it.append(el("span", "nm", ex), ren, rm);
+    }
+    box.appendChild(it);
+  });
+  const add = el("div", "oitem sub addex"), inp = el("input"), ok = el("button", null, "Add");
+  inp.type = "text"; inp.placeholder = "New exercise"; inp.setAttribute("aria-label", "New " + d + " exercise name");
+  ok.onclick = () => { const v = inp.value.trim(); if (!v) { inp.focus(); return; } addExercise(d, v); };
+  inp.onkeydown = e => { if (e.key === "Enter") ok.click(); };
+  add.append(inp, ok); box.appendChild(add);
+  return box;
 }
 function moveDay(i, dir) { const a = [...days]; [a[i], a[i + dir]] = [a[i + dir], a[i]]; days = a; saveLists(); renderDayBtns(); renderSettings(); }
 /* ---------- intro: weekly streak + this period's workouts and personal bests ---------- */
@@ -1098,13 +1147,14 @@ function renameDay(oldName, newName) {
   const k = mem.get("ex_" + oldName); if (k) mem.set("ex_" + newName, k);
   if (day === oldName) { day = newName; mem.set("day", day); }
   if (mem.get("pDay") === oldName) mem.set("pDay", newName);
+  if (dayOpen === oldName) dayOpen = newName;
   saveLists(); changed.forEach(s => writeSession(s.date, s));
   renderAll(); toast("Renamed to " + newName + "." + offlineNote());
 }
 function removeDay(d) {
   if (days.length <= 1) { toast("Keep at least one workout day.", true); return; }
   const n = allSets().filter(s => s.day === d).length;
-  if (n) { toast(d + " has " + n + " logged set" + (n > 1 ? "s" : "") + ". Remove its exercises in History first.", true); return; }
+  if (n) { toast(d + " has " + n + " logged set" + (n > 1 ? "s" : "") + ". Tap " + d + " to remove its exercises first.", true); return; }
   days = days.filter(x => x !== d); const nl = { ...lists }; delete nl[d]; lists = nl;
   saveLists(); renderAll(); toast("Removed " + d + "." + offlineNote());
 }
