@@ -1,14 +1,11 @@
 import { firebaseConfig, appCheckSiteKey } from "./firebase-config.js";
 import { firebaseBackend, mockBackend } from "./backend.js";
+import { LIB, PLANS, EQ, MUSCLES } from "./library.js";
 
 /* ---------- defaults ---------- */
 const DEFAULT_DAYS = ["Push", "Pull", "Legs", "Shoulders"];
-const BASE = {
-  Push: ["Chest Press", "Pec machine elbows", "Rope Tricep extension Vertical", "Rope Tricep extension – entrance", "Rope Tricep extension - cables machine", "One hand tri extension - entrance", "One hand tri extension – double cables"],
-  Pull: ["Lat pulldown straight grip", "Close grip", "Lat Pulldown Neutral Grip", "Lower back - freeweight", "Standing bicep curls", "Standing Hammer curls"],
-  Legs: ["Hack squat", "Hamstring curls", "Leg extensions (aristera)", "Calves"],
-  Shoulders: ["Shoulder press", "Lateral raises machine", "Face pulls"]
-};
+// No built-in exercise list: new users pick a starter plan (library.js) or start from scratch.
+const BASE = {};
 const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null, weekTarget: 4, keepAwake: true, celebrate: true, intro: true, introPeriod: "month" };
 const KG_LB = 2.20462;
 
@@ -31,7 +28,7 @@ const fmtSec = s => Math.floor(s / 60) + ":" + pad(Math.max(0, Math.round(s % 60
 
 /* ---------- state ---------- */
 let be = null, uid = null, unsub = null;
-let sessions = {}, days = [...DEFAULT_DAYS], lists = clone(BASE), prefs = { ...DEFAULT_PREFS }, body = { entries: {} };
+let sessions = {}, days = [], lists = {}, prefs = { ...DEFAULT_PREFS }, body = { entries: {} };
 let day = mem.get("day") || "Push", tab = mem.get("tab") || "training";
 let renaming = null, armed = null, adding = null, dayEditing = null, selSet = null;
 const expanded = new Set();
@@ -134,7 +131,7 @@ function renderExGrid() {
     grid.appendChild(b);
   });
   const add = el("button", "exb add", "+ Add exercise"); add.type = "button";
-  add.onclick = () => { adding = day; setTab("history"); setTimeout(() => { const i = $("newEx"); if (i) i.scrollIntoView({ block: "center" }); }, 60); };
+  add.onclick = () => openAdd(day);
   grid.appendChild(add);
 }
 // sets: chips; when `rerender` is given, chips are tappable and tapping one offers "Remove set"
@@ -338,15 +335,20 @@ async function syncWake() {
 
 /* ---------- history ---------- */
 function renderHistory() {
-  const hd = day, box = $("history"); box.innerHTML = "";
-  const all = allSets(), cur = $("date").value, names = namesFor(hd);
-  if (!names.length) box.appendChild(el("div", "empty", "No exercises for " + hd + " yet. Add your first one below."));
+  if (historyOther && !orphanNames().length) historyOther = false;
+  const hd = historyOther ? OTHER : day, box = $("history"); box.innerHTML = "";
+  if (historyOther) {
+    const bk = el("button", "add-btn other-btn", "‹ Back to " + day); bk.onclick = () => { historyOther = false; renderHistory(); }; box.appendChild(bk);
+    box.appendChild(el("p", "small tip", "Exercises you've logged that aren't in any of your current days. Their history is all here."));
+  }
+  const all = allSets(), cur = $("date").value, names = hd === OTHER ? orphanNames() : days.includes(hd) ? namesFor(hd) : [];
+  if (!names.length && hd !== OTHER) box.appendChild(el("div", "empty", days.length ? "No exercises for " + hd + " yet. Add your first one below." : "No workout days yet. Pick a plan in Settings → Workout days & exercises."));
   else if (all.some(s => s.day === hd)) box.appendChild(el("p", "small tip", "Tap any set to remove it."));
   names.forEach(ex => {
-    const byDate = {}; all.filter(s => s.ex === ex && s.day === hd).forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+    const byDate = {}; all.filter(s => s.ex === ex).forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
     const dates = Object.keys(byDate).sort().reverse();
     const card = el("div", "ex-card"), head = el("div", "ex-head");
-    const nSets = all.filter(s => s.ex === ex && s.day === hd).length, key = hd + "|" + ex;
+    const nSets = all.filter(s => s.ex === ex).length, key = hd + "|" + ex;
     if (renaming === key) {
       head.className = "ex-head renaming";
       const inp = el("input"); inp.type = "text"; inp.id = "rename-input"; inp.value = ex; inp.setAttribute("aria-label", "New name for " + ex);
@@ -363,7 +365,7 @@ function renderHistory() {
         const no = el("button", "use", "Cancel"), yes = el("button", "use danger", "Remove");
         yes.setAttribute("aria-label", "Confirm: remove " + ex);
         no.onclick = () => { armed = null; renderHistory(); };
-        yes.onclick = () => { armed = null; removeExercise(hd, ex); };
+        yes.onclick = () => { armed = null; removeExercise(hd, ex, true); };
         btns.append(no, yes);
       } else {
         const ren = el("button", "use", "Rename"), rm = el("button", "use", "Remove");
@@ -373,7 +375,7 @@ function renderHistory() {
         btns.append(ren, rm);
       }
       head.append(el("h3", null, ex), btns); card.appendChild(head);
-      if (armed === key) card.appendChild(el("p", "small warn", nSets ? "This deletes " + ex + " and its " + nSets + " logged set" + (nSets > 1 ? "s" : "") + "." : "This removes " + ex + " from " + hd + "."));
+      if (armed === key) card.appendChild(el("p", "small warn", nSets ? "This deletes " + ex + " and all " + nSets + " of its logged set" + (nSets > 1 ? "s" : "") + "." : "This removes " + ex + " from " + hd + "."));
     }
     if (!dates.length) card.appendChild(el("div", "none", "No sets logged yet."));
     (expanded.has(ex) ? dates : dates.slice(0, 3)).forEach((d, idx) => {
@@ -389,8 +391,13 @@ function renderHistory() {
     }
     box.appendChild(card);
   });
-  box.appendChild(addCard(hd));
+  if (days.includes(hd)) box.appendChild(addCard(hd));
+  // exercises with history that aren't in any of the current days (e.g. after changing plan)
+  if (hd !== OTHER) { const o = orphanNames(); if (o.length) { const b = el("button", "add-btn other-btn", "Not in your current plan (" + o.length + ") ›"); b.onclick = () => { historyOther = true; renderHistory(); }; box.appendChild(b); } }
 }
+const OTHER = "\u0000other";
+let historyOther = false;
+function orphanNames() { const inPlan = new Set(days.flatMap(d => namesFor(d))); const o = []; allSets().forEach(x => { if (!inPlan.has(x.ex) && !o.includes(x.ex)) o.push(x.ex); }); return o; }
 function addCard(hd) {
   const card = el("div", "ex-card add-card");
   if (adding === hd) {
@@ -402,7 +409,7 @@ function addCard(hd) {
     head.append(inp, ok, no); card.appendChild(head); setTimeout(() => inp.focus(), 0);
   } else {
     const b = el("button", "add-btn", "+ Add an exercise to " + hd);
-    b.onclick = () => { adding = hd; renaming = null; renderHistory(); };
+    b.onclick = () => { renaming = null; openAdd(hd); };
     card.appendChild(b);
   }
   return card;
@@ -465,13 +472,14 @@ function renderProgress() {
   $("pvEx").hidden = view !== "ex"; $("pvCons").hidden = view !== "cons";
   if (view === "cons") { renderConsistency(); return; }
   const pDay = $("pDay"), pEx = $("pEx");
-  let pd = mem.get("pDay"); if (!days.includes(pd)) pd = day;
-  pDay.innerHTML = ""; days.forEach(d => pDay.appendChild(el("option", null, d))); pDay.value = pd;
-  const names = namesFor(pd); let pe = mem.get("pEx_" + pd); if (!names.includes(pe)) pe = names[0] || "";
+  const orph = orphanNames(), dOpts = orph.length ? [...days, OTHER] : [...days];
+  let pd = mem.get("pDay"); if (!dOpts.includes(pd)) pd = days.includes(day) ? day : dOpts[0];
+  pDay.innerHTML = ""; dOpts.forEach(d => { const o = el("option", null, d === OTHER ? "Not in your plan" : d); o.value = d; pDay.appendChild(o); }); pDay.value = pd;
+  const names = pd === OTHER ? orph : namesFor(pd); let pe = mem.get("pEx_" + pd); if (!names.includes(pe)) pe = names[0] || "";
   pEx.innerHTML = ""; names.forEach(n => pEx.appendChild(el("option", null, n))); pEx.value = pe;
   const box = $("progBody"); box.innerHTML = "";
   if (!pe) { box.appendChild(el("div", "empty", "No exercises in " + pd + " yet.")); return; }
-  const sets = working(allSets().filter(s => s.ex === pe && s.day === pd));
+  const sets = working(allSets().filter(s => s.ex === pe));
   if (!sets.length) { box.appendChild(el("div", "empty", "No working sets logged for " + pe + " yet. Log one in Training and your progress will show here.")); }
   else {
     // personal best: heaviest working weight, then most reps
@@ -639,6 +647,7 @@ function renderSettings() {
   $("introPRow").hidden = prefs.intro === false;
   $("sumTr").textContent = U() + " · rest " + (prefs.restOn ? fmtSec(prefs.restSec) : "off");
   $("sumDays").textContent = days.length + " day" + (days.length === 1 ? "" : "s");
+  renderShare();
   // workout days
   const dl = $("dayList"); dl.innerHTML = "";
   days.forEach((d, i) => {
@@ -688,12 +697,18 @@ function dayExercises(d) {
       inp.onkeydown = e => { if (e.key === "Enter") ok.click(); if (e.key === "Escape") no.click(); };
       it.append(inp, ok, no); setTimeout(() => { inp.focus(); inp.select(); }, 0);
     } else if (exArmed === key) {
-      const n = allSets().filter(x => x.ex === ex && x.day === d).length;
-      const yes = el("button", "danger", "Remove"), no = el("button", null, "Cancel");
-      yes.onclick = () => { exArmed = null; removeExercise(d, ex); };
-      no.onclick = () => { exArmed = null; renderSettings(); };
+      const n = allSets().filter(x => x.ex === ex).length;
+      const no = el("button", null, "Cancel"); no.onclick = () => { exArmed = null; renderSettings(); };
       it.classList.add("armed");
-      it.append(el("span", "nm", "Remove " + ex + (n ? " and its " + n + " logged set" + (n > 1 ? "s" : "") : "") + "?"), yes, no);
+      if (n) {
+        const keep = el("button", null, "Remove, keep history"), del = el("button", "danger", "Delete with " + n + " set" + (n > 1 ? "s" : ""));
+        keep.onclick = () => { exArmed = null; removeExercise(d, ex, false); };
+        del.onclick = () => { exArmed = null; removeExercise(d, ex, true); };
+        it.append(el("span", "nm", "Remove " + ex + " from " + d + "? It has " + n + " logged set" + (n > 1 ? "s" : "") + "."), keep, del, no);
+      } else {
+        const yes = el("button", "danger", "Remove"); yes.onclick = () => { exArmed = null; removeExercise(d, ex, false); };
+        it.append(el("span", "nm", "Remove " + ex + " from " + d + "?"), yes, no);
+      }
     } else {
       const ren = el("button", null, "✎"), rm = el("button", null, "✕"); rm.setAttribute("aria-label", "Remove " + ex); ren.setAttribute("aria-label", "Rename " + ex);
       ren.onclick = () => { exEditing = key; exArmed = null; renderSettings(); };
@@ -702,11 +717,9 @@ function dayExercises(d) {
     }
     box.appendChild(it);
   });
-  const add = el("div", "oitem sub addex"), inp = el("input"), ok = el("button", null, "Add");
-  inp.type = "text"; inp.placeholder = "New exercise"; inp.setAttribute("aria-label", "New " + d + " exercise name");
-  ok.onclick = () => { const v = inp.value.trim(); if (!v) { inp.focus(); return; } addExercise(d, v); };
-  inp.onkeydown = e => { if (e.key === "Enter") ok.click(); };
-  add.append(inp, ok); box.appendChild(add);
+  const add = el("div", "oitem sub addex"), ok = el("button", "addfrom", "+ Add exercise");
+  ok.setAttribute("aria-label", "Add an exercise to " + d); ok.onclick = () => openAdd(d);
+  add.append(ok); box.appendChild(add);
   return box;
 }
 function moveDay(i, dir) { const a = [...days]; [a[i], a[i + dir]] = [a[i + dir], a[i]]; days = a; saveLists(); renderDayBtns(); renderSettings(); }
@@ -809,24 +822,319 @@ function showIntro(launch) {
 function closeIntro() {
   clearTimeout(introTimer); const ov = $("intro"); if (ov.hidden) return;
   ov.classList.remove("show"); document.body.classList.remove("intro-open");
-  setTimeout(() => { ov.hidden = true; if (tourPending) startTour(); }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
+  setTimeout(() => { ov.hidden = true; if (planPending) openPlan("first"); else if (tourPending) startTour(); }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
 }
-let introPending = false, hiddenSince = 0, firstDataTimer = null;
+let introPending = false, hiddenSince = 0, firstDataTimer = null, hasListDoc = false, planPending = false;
 function revealMain() {
   introPending = false; clearTimeout(firstDataTimer);
   // first-time tour: only for brand-new users (anyone with logged sets already knows the app)
+  planPending = !days.length && !/[?&]noplan\b/.test(location.search);
+  if (!days.length && /[?&]mock\b/.test(location.search) && /[?&]noplan\b/.test(location.search)) { const p = PLANS[0]; days = Object.keys(p.days); lists = clone(p.days); saveLists(); } // automated tests only
   if (!prefs.tourDone) { if (allSets().length) { prefs = { ...prefs, tourDone: true }; savePrefs(); } else if (!/[?&]notour\b/.test(location.search)) tourPending = true; }
   showIntro(true); // covers the screen first (if switched on)…
   show("main"); renderTabs(); renderAll(); // …then the main screen is built underneath it
-  if (tourPending && $("intro").hidden) setTimeout(startTour, 300);
+  if ($("intro").hidden) { if (planPending) setTimeout(() => openPlan("first"), 200); else if (tourPending) setTimeout(startTour, 300); }
+}
+
+
+/* ---------- starter plans: pick one (new users), change plan (Settings), plan codes ---------- */
+const libByName = Object.fromEntries(LIB.map(x => [x.n, x]));
+const firstName = () => ((me && me.name) || "").trim().split(/\s+/)[0];
+let planUI = null; // { mode: "first" | "change", view, sel, plan }
+const cleanCode = c => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+function openPlan(mode) {
+  planPending = false;
+  planUI = { mode, view: "list", sel: mode === "first" ? "ppl" : null, plan: null };
+  const ov = $("plan"); ov.hidden = false; document.body.classList.add("menu-open", "planning");
+  if (mode === "change") pushLayer("plan");
+  renderPlan(); $("planPanel").scrollTop = 0;
+}
+function closePlan(done) {
+  if (!planUI) return; const first = planUI.mode === "first";
+  if (!first) popLayer("plan");
+  planUI = null; $("plan").hidden = true; document.body.classList.remove("menu-open", "planning");
+  if (first && tourPending) setTimeout(startTour, 350);
+}
+function planGo(view, extra) { Object.assign(planUI, { view }, extra || {}); renderPlan(); $("planPanel").scrollTop = 0; }
+function planBtn(cls, text, fn) { const b = el("button", cls, text); b.type = "button"; b.onclick = fn; return b; }
+function renderPlan() {
+  const P = planUI, box = $("planBody"); if (!P) return; box.innerHTML = "";
+  const head = el("div", "phead");
+  if (P.view !== "list") head.appendChild(planBtn("icon-btn pback", "‹", () => planGo("list")));
+  else if (P.mode === "change") head.appendChild(planBtn("icon-btn pback", "✕", () => closePlan()));
+  const tt = el("div", "ptitle");
+  const kick = P.mode === "first" ? (P.view === "list" ? "Welcome" + (firstName() ? ", " + firstName() : "") + " 👋 · Step 1 of 2" : "Step 2 of 2") : "Change plan";
+  tt.append(el("span", "pkick", kick)); head.appendChild(tt); box.appendChild(head);
+  if (P.view === "list") {
+    box.appendChild(el("h2", "pbig", P.mode === "first" ? "Pick a starting plan" : "Pick a new plan"));
+    box.appendChild(el("div", "reassure", P.mode === "first" ? "🔄 You can change your plan any time in Settings. Your logged sets are always kept." : "🔄 Your logged sets are always kept. You'll see exactly what changes before anything is saved."));
+    PLANS.forEach(p => {
+      const c = el("button", "plancard" + (P.sel === p.id ? " sel" : "")); c.type = "button"; c.setAttribute("aria-pressed", String(P.sel === p.id));
+      const top = el("div", "top"); top.append(el("b", null, p.name), el("span", "per", p.target + "+ × week")); c.appendChild(top);
+      c.appendChild(el("span", "who", p.who));
+      const ch = el("div", "dchips"); Object.keys(p.days).forEach(d => ch.appendChild(el("span", null, d))); c.appendChild(ch);
+      c.onclick = () => { P.sel = p.id; renderPlan(); }; box.appendChild(c);
+    });
+    const sc = el("button", "plancard scratch" + (P.sel === "scratch" ? " sel" : "")); sc.type = "button"; sc.setAttribute("aria-pressed", String(P.sel === "scratch"));
+    sc.append(el("b", null, "Start from scratch"), el("span", "who", "Build your own days and exercises from the list, or type your own."));
+    sc.onclick = () => { P.sel = "scratch"; renderPlan(); }; box.appendChild(sc);
+    box.appendChild(planBtn("lnk pcode", "Have a plan code?", () => planGo("code")));
+    const go = planBtn("save pcta", P.sel === "scratch" ? "Continue" : "Preview plan", () => {
+      if (!P.sel) return; if (P.sel === "scratch") planGo("scratch");
+      else { const p = PLANS.find(x => x.id === P.sel); planGo("preview", { plan: { id: p.id, name: p.name, days: Object.keys(p.days), lists: p.days, target: p.target } }); }
+    });
+    go.disabled = !P.sel; box.appendChild(go);
+  } else if (P.view === "preview") renderPlanPreview(box, P.plan);
+  else if (P.view === "code") {
+    box.appendChild(el("h2", "pbig", "Enter a plan code"));
+    box.appendChild(el("p", "plead", "Got a code from a friend? You'll get a copy of their workout days and exercises. Their weights and history stay private."));
+    const f = el("form", "ef"); f.noValidate = true;
+    const inp = el("input"); inp.id = "planCodeIn"; inp.placeholder = "e.g. GT3"; inp.autocapitalize = "characters"; inp.autocomplete = "off"; inp.spellcheck = false; inp.setAttribute("aria-label", "Plan code"); inp.value = P.code || "";
+    const go = el("button", "save", "Find plan"); go.type = "submit";
+    const msg = el("div", "toast err"); msg.setAttribute("role", "status");
+    f.append(inp, go, msg); box.appendChild(f); setTimeout(() => inp.focus(), 50);
+    f.onsubmit = async e => {
+      e.preventDefault(); const code = cleanCode(inp.value); P.code = inp.value; msg.textContent = "";
+      if (code.length < 3) { msg.textContent = "Codes are at least 3 letters or numbers."; return; }
+      if (!navigator.onLine) { msg.textContent = "You're offline. Connect to look up a code."; return; }
+      go.disabled = true;
+      try {
+        const d = await be.getPlan(code);
+        if (!d || !Array.isArray(d.days) || !d.days.length) { msg.textContent = "No plan found for " + code + ". Check the code and try again."; return; }
+        const ls = {}; d.days.forEach(x => { ls[x] = Array.isArray(d.lists && d.lists[x]) ? d.lists[x].filter(y => typeof y === "string") : []; });
+        planGo("preview", { plan: { id: "code:" + code, name: (d.by ? d.by + "'s plan" : "Shared plan") + " · " + code, days: d.days.filter(x => typeof x === "string"), lists: ls, code } });
+      } catch (err) { msg.textContent = "Couldn't look that up. Check your connection and try again."; }
+      finally { go.disabled = false; }
+    };
+  } else if (P.view === "scratch") {
+    box.appendChild(el("h2", "pbig", "Start from scratch"));
+    box.appendChild(el("p", "plead", P.mode === "change" ? "Your current days and exercises will be replaced by one new day. Every logged set is kept." : "Name your first workout day. You can add more days and exercises any time."));
+    const f = el("form", "ef"); f.noValidate = true;
+    const inp = el("input"); inp.id = "scratchIn"; inp.placeholder = "e.g. Push, Upper, Day 1"; inp.setAttribute("aria-label", "First workout day name"); inp.maxLength = 30;
+    const sug = el("div", "dchips sug"); ["Push", "Pull", "Legs", "Upper", "Lower", "Full body", "Day 1"].forEach(n => sug.appendChild(planBtn("chip", n, () => { inp.value = n; })));
+    const go = el("button", "save", "Create"); go.type = "submit";
+    f.append(inp, sug, go); box.appendChild(f); setTimeout(() => inp.focus(), 50);
+    f.onsubmit = e => { e.preventDefault(); const n = inp.value.trim() || "Day 1"; applyPlan({ id: "scratch", name: "your own plan", days: [n], lists: { [n]: [] } }); };
+  }
+}
+function renderPlanPreview(box, p) {
+  const P = planUI, n = p.days.reduce((a, d) => a + (p.lists[d] || []).length, 0);
+  box.appendChild(el("h2", "pbig", p.name));
+  box.appendChild(el("p", "plead", p.days.length + " day" + (p.days.length === 1 ? "" : "s") + " · " + n + " exercises" + (p.target ? " · weekly target " + p.target : "") + (P.mode === "first" ? ". Not sure? Pick it anyway: you can switch plan or edit anything later in Settings." : ".")));
+  if (P.mode === "change") {
+    const add = p.days.filter(d => !days.includes(d)), gone = days.filter(d => !p.days.includes(d));
+    const dv = el("div", "diff"); dv.appendChild(el("span", "lblx", "Your days"));
+    p.days.forEach(d => { const r = el("div", "row"); r.append(el("span", add.includes(d) ? "tagnew" : null, (add.includes(d) ? "+ " : "") + d), el("i", null, (p.lists[d] || []).length + " exercises")); dv.appendChild(r); });
+    if (gone.length) { const r = el("div", "row"); r.append(el("span", "muted", "− " + gone.join(", ")), el("i", null, "removed from your list")); dv.appendChild(r); }
+    box.appendChild(dv);
+    const known = [...new Set(p.days.flatMap(d => p.lists[d] || []))].map(x => [x, new Set(allSets().filter(s => s.ex === x).map(s => s.date)).size]).filter(x => x[1] > 0);
+    const hv = el("div", "diff"); hv.appendChild(el("span", "lblx", "Your history comes with you"));
+    if (known.length) known.slice(0, 5).forEach(([x, c]) => { const r = el("div", "row"); r.append(el("span", null, x), el("i", "okc", "✓ " + c + " session" + (c === 1 ? "" : "s") + " kept")); hv.appendChild(r); });
+    if (known.length > 5) { const r = el("div", "row"); r.append(el("span", "muted", "+ " + (known.length - 5) + " more"), el("i", "okc", "✓ kept")); hv.appendChild(r); }
+    hv.appendChild(el("span", "small", "No logged sets are ever deleted. Exercises you drop stay in History and Progress."));
+    box.appendChild(hv);
+  }
+  p.days.forEach(d => {
+    const blk = el("div", "dayblock"), h = el("div", "dh"); h.append(el("span", null, d), el("small", null, (p.lists[d] || []).length + " exercises")); blk.appendChild(h);
+    (p.lists[d] || []).forEach(x => { const r = el("div", "pex"); r.append(el("span", null, x), el("i", null, (libByName[x] || {}).m || "")); blk.appendChild(r); });
+    box.appendChild(blk);
+  });
+  box.appendChild(planBtn("save pcta", P.mode === "first" ? "Use this plan" : "Switch plan", () => applyPlan(p)));
+}
+function applyPlan(p) {
+  const first = planUI && planUI.mode === "first";
+  days = [...p.days]; lists = {}; days.forEach(d => { lists[d] = [...(p.lists[d] || [])]; });
+  prefs = { ...prefs, plan: p.id }; if (p.target) prefs.weekTarget = p.target;
+  day = days[0]; mem.set("day", day); mem.set("ex_" + day, (lists[day] || [])[0] || "");
+  saveLists(); savePrefs(); dayOpen = null;
+  closePlan(true); renderAll(); setTab("training");
+  toast((first ? "You're set up with " : "Switched to ") + p.name + "." + offlineNote());
+}
+// share my plan: one code per person, unique across everyone
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const randomCode = () => Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("");
+async function sharePlan(wanted) {
+  const msg = $("shareMsg"); msg.textContent = ""; msg.classList.add("err");
+  if (!days.length || !days.some(d => (lists[d] || []).length)) { msg.textContent = "Add some exercises first, then share your plan."; return; }
+  if (!navigator.onLine) { msg.textContent = "You're offline. Connect to share your plan."; return; }
+  const data = { v: 1, by: firstName(), days: [...days], lists: Object.fromEntries(days.map(d => [d, [...(lists[d] || [])]])), updated: Date.now() };
+  const old = prefs.planCode;
+  try {
+    let code = wanted ? cleanCode(wanted) : (old || randomCode());
+    if (wanted && (code.length < 3 || code.length > 12)) { msg.textContent = "Use 3 to 12 letters or numbers."; return; }
+    for (let i = 0; ; i++) {
+      try { await be.claimPlan(uid, code, data); break; }
+      catch (e) { if (e && e.code === "taken") { if (wanted) { msg.textContent = code + " is already taken. Try another code."; return; } if (i > 6) throw e; code = randomCode(); } else throw e; }
+    }
+    if (old && old !== code) be.deletePlan(old).catch(() => {});
+    prefs = { ...prefs, planCode: code }; savePrefs(); renderShare();
+    msg.classList.remove("err"); $("shareMsg").textContent = old === code ? "Updated. Anyone using " + code + " now gets your current plan." : "Your plan code is " + code + ". Share it with friends.";
+  } catch (e) { msg.textContent = "Couldn't save your code. Check your connection and try again."; }
+}
+async function stopSharing() {
+  const c = prefs.planCode; if (!c) return;
+  try { await be.deletePlan(c); } catch (e) { $("shareMsg").textContent = "Couldn't stop sharing. Check your connection."; return; }
+  prefs = { ...prefs, planCode: null }; savePrefs(); renderShare(); $("shareMsg").classList.remove("err"); $("shareMsg").textContent = "Stopped sharing. " + c + " no longer works.";
+}
+function renderShare() {
+  const c = prefs.planCode, on = !!c;
+  $("shareOn").hidden = !on; $("shareOff").hidden = on;
+  if (on) $("shareCode").textContent = c;
+}
+
+
+/* ---------- add an exercise: your exercises first, the library, or your own name ---------- */
+// name matching: ignore case, spaces, dashes and plurals; allow small typos
+const normName = x => String(x).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean).map(w => w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w).join(" ");
+const squash = x => normName(x).replace(/ /g, "");
+function lev(a, b) {
+  if (Math.abs(a.length - b.length) > 3) return 9;
+  const m = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) m[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return m[a.length][b.length];
+}
+// every exercise this person knows: in any day's list, or with logged sets
+function knownNames() { const n = []; days.forEach(d => (lists[d] || []).forEach(x => { if (!n.includes(x)) n.push(x); })); allSets().forEach(x => { if (!n.includes(x.ex)) n.push(x.ex); }); return n; }
+// how well a name matches what's typed: 0 starts with, 1 contains, 2 every word matches (prefix or small typo), -1 no match
+function matchScore(name, q) {
+  const a = squash(name), b = squash(q); if (!b) return -1;
+  if (a.startsWith(b)) return 0; if (a.includes(b)) return 1;
+  const nw = normName(name).split(" "), qw = normName(q).split(" ");
+  return qw.every(w => nw.some(x => x.startsWith(w) || (w.length >= 4 && lev(x.slice(0, w.length + 1), w) <= 1) || (w.length >= 4 && lev(x, w) <= 1))) ? 2 : -1;
+}
+// a name that's (almost) the same as one they already have
+function nearDuplicate(name) {
+  const a = squash(name); if (a.length < 3) return null;
+  let best = null, bd = 9;
+  knownNames().concat(LIB.map(x => x.n)).forEach(k => {
+    if (k === name) return; const b = squash(k);
+    const d = a === b ? 0 : (a.length >= 5 ? lev(a, b) : 9);
+    if (d <= 2 && d < bd) { bd = d; best = k; }
+  });
+  return best;
+}
+function sessionsOf(ex) { return new Set(allSets().filter(x => x.ex === ex).map(x => x.date)).size; }
+function lastOf(ex) { const all = working(allSets().filter(x => x.ex === ex)); if (!all.length) return null; const d = all.reduce((a, x) => x.date > a ? x.date : a, ""); const s0 = all.filter(x => x.date === d).sort((a, b) => a.t - b.t)[0]; return { date: d, s: s0 }; }
+let addUI = null; // { d, q, muscle, pick }
+function openAdd(d) {
+  if (!d) return;
+  addUI = { d, q: "", muscle: knownNames().length ? "yours" : MUSCLES[0], pick: null };
+  $("addSheet").hidden = false; document.body.classList.add("menu-open"); pushLayer("add");
+  renderAdd(); setTimeout(() => { const i = $("addQ"); if (i) i.focus({ preventScroll: true }); }, 80);
+}
+function closeAdd() { if (!addUI) return; popLayer("add"); reallyCloseAdd(); }
+function reallyCloseAdd() {
+  if (!addUI) return; addUI = null; $("addSheet").hidden = true;
+  if (!$("drawer").classList.contains("open") && !planUI) document.body.classList.remove("menu-open");
+  renderAll(); if ($("drawer").classList.contains("open")) renderSettings();
+}
+function addPicked(name) {
+  const d = addUI.d;
+  if (exercisesFor(d).includes(name)) { toast(name + " is already on " + d + ".", true); return; }
+  addExercise(d, name, true); renderAdd();
+}
+function renderAdd() {
+  const A = addUI; if (!A) return;
+  $("addTitle").textContent = A.pick ? A.pick.n : "Add to " + A.d;
+  $("addBack").hidden = !A.pick;
+  const body = $("addBody"); body.innerHTML = "";
+  if (A.pick) { renderEquip(body, A.pick); return; }
+  const sw = el("div", "srch2"), q = el("input"); q.id = "addQ"; q.type = "search"; q.placeholder = "Search " + LIB.length + "+ exercises or type a name"; q.value = A.q; q.autocomplete = "off"; q.setAttribute("aria-label", "Search exercises");
+  q.oninput = () => { A.q = q.value; renderAddResults(); };
+  q.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); const first = $("addRes").querySelector(".ri .add:not(.done)"); if (A.q.trim()) addOwn(A.q.trim()); else if (first) first.click(); } };
+  sw.appendChild(q); body.appendChild(sw);
+  const res = el("div", "addres"); res.id = "addRes"; body.appendChild(res);
+  renderAddResults();
+}
+function resRow(name, sub, tagList, done, onAdd) {
+  const r = el("div", "ri"), nm = el("div", "nm"); nm.appendChild(el("b", null, name));
+  if (sub) nm.appendChild(el("span", "last", sub));
+  if (tagList && tagList.length) { const t = el("div", "tags"); tagList.forEach(([x, m]) => t.appendChild(el("span", m ? "m" : null, x))); nm.appendChild(t); }
+  const b = el("button", "add" + (done ? " done" : ""), done ? "✓" : "+"); b.type = "button"; b.disabled = !!done;
+  b.setAttribute("aria-label", done ? name + " is already added" : "Add " + name); b.onclick = onAdd;
+  r.append(nm, b); return r;
+}
+function knownRow(x) {
+  const l = lastOf(x), n = sessionsOf(x), A = addUI;
+  const sub = l ? "Last: " + fmtW(l.s.w) + " × " + l.s.r + " · " + n + " session" + (n === 1 ? "" : "s") : "In your plan";
+  return resRow(x, sub, null, exercisesFor(A.d).includes(x), () => addPicked(x));
+}
+function libRow(x) {
+  const A = addUI, eq = x.e.split("").map(c => EQ[c]);
+  const done = exercisesFor(A.d).some(n => n === x.n || n.startsWith(x.n + " ("));
+  return resRow(x.n, null, [[x.m, true], ...eq.map(e => [e])], done, () => { if (x.e.length > 1) { A.pick = x; renderAdd(); } else addPicked(x.n); });
+}
+function renderAddResults() {
+  const A = addUI, res = $("addRes"); if (!res) return; res.innerHTML = "";
+  const q = A.q.trim(), known = knownNames();
+  if (!q) {
+    const chips = el("div", "mchips"); const all = (known.length ? ["yours"] : []).concat(MUSCLES);
+    all.forEach(m => { const c = el("button", "chip" + (A.muscle === m ? " on" : ""), m === "yours" ? "Your exercises" : m); c.type = "button"; c.setAttribute("aria-pressed", String(A.muscle === m)); c.onclick = () => { A.muscle = m; renderAddResults(); }; chips.appendChild(c); });
+    res.appendChild(chips);
+    const box = el("div", "res");
+    if (A.muscle === "yours") known.forEach(x => box.appendChild(knownRow(x)));
+    else LIB.filter(x => x.m === A.muscle).forEach(x => box.appendChild(libRow(x)));
+    res.appendChild(box);
+    res.appendChild(el("p", "small", "Not in the list? Type the name in the search box and add it as your own."));
+    return;
+  }
+  const kn = known.map(x => [x, matchScore(x, q)]).filter(x => x[1] >= 0).sort((a, b) => a[1] - b[1]).map(x => x[0]);
+  const lb = LIB.map(x => [x, matchScore(x.n, q)]).filter(x => x[1] >= 0 && !known.includes(x[0].n)).sort((a, b) => a[1] - b[1]).map(x => x[0]);
+  if (kn.length) { res.appendChild(el("span", "lblx", "Your exercises")); const b = el("div", "res"); kn.forEach(x => b.appendChild(knownRow(x))); res.appendChild(b); }
+  if (lb.length) { res.appendChild(el("span", "lblx", "From the library")); const b = el("div", "res"); lb.slice(0, 25).forEach(x => b.appendChild(libRow(x))); res.appendChild(b); }
+  if (!kn.length && !lb.length) res.appendChild(el("p", "small", "No matches in your exercises or the library."));
+  const own = el("button", "own"); own.type = "button";
+  const t = el("span"); t.append(document.createTextNode("+ Add “" + q + "” as your own exercise"), el("small", null, "Type any name, exactly as you call it."));
+  own.appendChild(t); own.onclick = () => addOwn(q); res.appendChild(own);
+}
+async function addOwn(name) {
+  name = name.trim().replace(/\s+/g, " "); if (!name) return;
+  const near = nearDuplicate(name);
+  if (near) {
+    const l = lastOf(near), n = sessionsOf(near);
+    const ok = await askConfirm("Did you mean " + near + "?",
+      "You typed “" + name + "”. " + (n ? "You've logged " + near + " " + n + " time" + (n === 1 ? "" : "s") + ". " : "") + "Using the same name keeps your weights and reps together.",
+      "Use " + near, "No, it's a new exercise", l ? near + " · Last: " + fmtW(l.s.w) + " × " + l.s.r + " · " + shortDate(l.date) : null);
+    if (ok) name = near;
+  }
+  if (!addUI) return; addUI.q = ""; addPicked(name); renderAdd();
+}
+function renderEquip(body, x) {
+  const A = addUI, codes = x.e.split("");
+  if (A.eq === undefined) A.eq = null;
+  const nm = () => A.eq ? x.n + " (" + EQ[A.eq].toLowerCase() + ")" : x.n;
+  body.appendChild(el("p", "plead", "Which version do you do? It becomes part of the name, so each version keeps its own history."));
+  body.appendChild(el("span", "lblx", "Equipment"));
+  const row = el("div", "eqpick");
+  [[null, "Any / not sure"], ...codes.map(c => [c, EQ[c]])].forEach(([c, label]) => { const b = el("button", "chip" + (A.eq === c ? " on" : ""), label); b.type = "button"; b.setAttribute("aria-pressed", String(A.eq === c)); b.onclick = () => { A.eq = c; renderAdd(); }; row.appendChild(b); });
+  body.appendChild(row);
+  body.appendChild(el("span", "lblx", "Name on your list"));
+  body.appendChild(el("div", "namebox", nm()));
+  const go = el("button", "save", "Add to " + A.d); go.type = "button";
+  go.onclick = () => { const n = nm(); A.pick = null; A.eq = undefined; addPicked(n); };
+  body.appendChild(go);
+  body.appendChild(el("p", "small", "Muscle: " + x.m));
+}
+// small confirm dialog → Promise<boolean>
+function askConfirm(title, text, ok, cancel, card) {
+  return new Promise(res => {
+    const box = $("ask"); $("askTitle").textContent = title; $("askText").textContent = text;
+    $("askCard").hidden = !card; if (card) $("askCard").textContent = card;
+    $("askOk").textContent = ok; $("askNo").textContent = cancel || "Cancel";
+    box.hidden = false; setTimeout(() => $("askOk").focus(), 30);
+    const done = v => { box.hidden = true; $("askOk").onclick = $("askNo").onclick = null; res(v); };
+    $("askOk").onclick = () => done(true); $("askNo").onclick = () => done(false);
+    box.onkeydown = e => { if (e.key === "Escape") { e.stopPropagation(); done(false); } };
+  });
 }
 
 /* ---------- guided tour: highlights the real buttons, one step at a time ---------- */
 let tourPending = false, tour = null;
 const TOUR = [
   { tab: "training", k: "Welcome 👋", t: "Quick tour?", p: "STEPS short steps, about a minute, showing every part of the app. You can replay it any time in Settings → Help.", btn: "Show me", skip: "Skip" },
-  { tab: "training", sel: "#dayBtns", t: "Your workout days", p: "Pick today's workout: Push, Pull, Legs or Shoulders. You can rename them or add your own in Settings." },
-  { tab: "training", sel: "#exGrid", t: "Pick an exercise", p: "Tap the exercise you're doing. \"Last\" shows set 1 from last time. Press and hold a button, then drag, to change the order." },
+  { tab: "training", sel: "#dayBtns", t: "Your workout days", p: "Pick today's workout day. You can rename days, add your own or switch to another plan any time in Settings." },
+  { tab: "training", sel: "#exGrid", t: "Pick an exercise", p: "Tap the exercise you're doing. \"Last\" shows set 1 from last time. Hold and drag to reorder; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
   { tab: "training", sel: "#logCard .pair", t: "Weight and reps", p: "Set 1 is filled in from set 1 last time, so you can match or beat it. Set 2 copies the set you just did. Adjust with − and +." },
   { tab: "training", sel: "#save", t: "Save the set", p: "Tap Save set. A rest timer starts at the top. Tap it for +30s or Skip. Beat your best and you'll get a personal-best celebration 🏆" },
   { tab: "training", sel: "#todayBox", t: "Today so far", p: "Your sets for today appear here. Saved one by mistake? Tap it, then Remove set." },
@@ -836,7 +1144,7 @@ const TOUR = [
   { tab: "progress", pview: "cons", sel: "#pvCons", t: "Progress: consistency", p: "A calendar of the days you trained and how many workouts you did each week against your target." },
   { tab: "body", sel: "#pane-body .card", t: "Body weight", p: "Log your weight and set a goal. The 7-day average smooths out daily ups and downs. Hit your goal and you'll get a celebration." },
   { tab: "training", sel: "#chatBub", round: true, t: "Ask the coach", p: "Tap HELP to ask how to use the app or how to do an exercise. Press and hold it to move it out of the way." },
-  { tab: "training", sel: "#menuOpen", t: "Settings", p: "Your days & exercises, units, rest timer, weekly target, colours, intro, account and Excel export. This tour is in there too." },
+  { tab: "training", sel: "#menuOpen", t: "Settings", p: "Your days & exercises, change plan, plan codes to share, units, rest timer, weekly target, colours, account and Excel export. This tour is in there too." },
   { tab: "training", k: "All set ✅", t: "Go lift!", p: "Log your first set and start your streak. Tap HELP if you get stuck.", btn: "Start", skip: "" }
 ];
 const tourVisible = sel => { const e = document.querySelector(sel); if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
@@ -917,7 +1225,11 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ---------- phone Back button closes the chat / settings instead of leaving the app ---------- */
-const layerClosers = { tour: () => endTour() };
+const layerClosers = {
+  tour: () => endTour(),
+  plan: () => { if (planUI && planUI.mode === "change") { planUI = null; $("plan").hidden = true; document.body.classList.remove("menu-open", "planning"); } },
+  add: () => reallyCloseAdd()
+};
 let ignorePop = 0;
 function pushLayer(name) { try { history.pushState({ layer: name }, ""); } catch (e) {} }
 // closed from inside the app: also remove our history entry, and ignore the popstate that causes
@@ -936,7 +1248,10 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Bottom tabs: Training, History, Progress, Body.
 - Training tab: exercise buttons for the chosen day. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
 - Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
-- Add an exercise: "+ Add exercise" at the end of the exercise buttons. Rename or remove an exercise: History tab, open the exercise, Rename or Remove (renaming also updates past sets).
+- Add an exercise: "+ Add exercise" at the end of the exercise buttons (or in Settings → Workout days & exercises, open a day). It searches the built-in list of 130+ exercises grouped by muscle with equipment versions, shows the user's own exercises first with their last result, and lets them type any name as their own. It asks "Did you mean…?" if a typed name is almost the same as an existing one, so history stays together.
+- Rename or remove an exercise: Settings → Workout days & exercises (open the day) or the History tab. Renaming updates past sets everywhere; renaming onto an existing name offers to merge the two. Removing from a day can keep the history or delete it.
+- Plans: new users pick a starter plan (Push/Pull/Legs, Upper/Lower, Full body, Body-part split) or start from scratch. Change plan any time in Settings → Workout days & exercises → Change plan; logged sets are never deleted and history follows the exercise name. Exercises not in the current plan are under History → "Not in your current plan".
+- Plan codes: Settings → Workout days & exercises → Share my plan creates a unique code (or choose your own); friends enter it via "Have a plan code?" on the plan picker. Only days and exercise names are shared, never weights or history.
 - Workout days (add, rename, reorder, remove): Settings → Workout days & exercises.
 - Settings → Training: units kg/lbs, rest timer on/off and length, weekly session target, keep screen on, celebrations on/off. Settings → Colours: themes, including custom ones. Settings → Your data: Export to Excel, import sets from Excel. Settings → Account: sign out.
 - Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
@@ -1389,47 +1704,54 @@ function removeSetByT(date, t) {
   if (next.sets.length) sessions[date] = next; else delete sessions[date];
   renderPane(); writeSession(date, next); toast("Set deleted." + offlineNote());
 }
-function addExercise(d, name) {
+function addExercise(d, name, fromSheet) {
   const n = name.trim(); if (!n) return;
   if (exercisesFor(d).includes(n)) { toast("That's already on the " + d + " list.", true); return; }
   lists = { ...lists, [d]: [...(lists[d] || []), n] }; adding = null;
   if (d === day) mem.set("ex_" + day, n);
   renderSelect(); renderHistory(); renderSettings(); saveLists(); toast("Added " + n + " to " + d + "." + offlineNote());
 }
-function removeExercise(d, ex) {
-  lists = { ...lists, [d]: (lists[d] || []).filter(n => n !== ex) };
+// Remove from one day's list. withSets: also delete every logged set of it (and drop it from every list).
+function removeExercise(d, ex, withSets) {
+  if (withSets) { const nl = {}; Object.keys(lists).forEach(k => { nl[k] = (lists[k] || []).filter(n => n !== ex); }); lists = nl; }
+  else lists = { ...lists, [d]: (lists[d] || []).filter(n => n !== ex) };
   const changed = [];
-  Object.values(sessions).forEach(s => {
-    if ((s.sets || []).some(x => x.ex === ex && x.day === d)) {
-      const next = { date: s.date, sets: s.sets.filter(x => !(x.ex === ex && x.day === d)) };
+  if (withSets) Object.values(sessions).forEach(s => {
+    if ((s.sets || []).some(x => x.ex === ex)) {
+      const next = { date: s.date, sets: s.sets.filter(x => x.ex !== ex) };
       if (next.sets.length) sessions[s.date] = next; else delete sessions[s.date];
       changed.push(next);
     }
   });
-  if (mem.get("ex_" + d) === ex) mem.set("ex_" + d, "");
+  days.forEach(k => { if (mem.get("ex_" + k) === ex && !(lists[k] || []).includes(ex)) mem.set("ex_" + k, ""); });
   expanded.delete(ex); renaming = null; armed = null;
   renderSelect(); renderHistory(); renderSettings(); saveLists(); changed.forEach(s => writeSession(s.date, s));
-  toast("Removed " + ex + "." + offlineNote());
+  toast((withSets ? "Deleted " + ex + " and its sets." : "Removed " + ex + " from " + d + ". Its history is kept.") + offlineNote());
 }
-function renameExercise(d, oldName, newName) {
-  newName = newName.trim();
+// An exercise is its name: renaming changes it in every day's list and every logged set.
+// Renaming onto a name that already exists merges the two (asks first).
+async function renameExercise(d, oldName, newName) {
+  newName = (newName || "").trim().replace(/\s+/g, " ");
   if (!newName || newName === oldName) { renaming = null; renderHistory(); return; }
-  if (exercisesFor(d).includes(newName)) { toast("There's already an exercise called " + newName + " in " + d + ".", true); return; }
-  const idx = (lists[d] || []).indexOf(oldName);
-  lists = { ...lists, [d]: idx >= 0 ? lists[d].map(n => n === oldName ? newName : n) : [...(lists[d] || []), newName] };
+  const exists = knownNames().includes(newName);
+  if (exists) {
+    const n = allSets().filter(x => x.ex === oldName).length;
+    const ok = await askConfirm("Merge into " + newName + "?", "You already have " + newName + ". " + (n ? "All " + n + " set" + (n === 1 ? "" : "s") + " of " + oldName + " will be listed under " + newName + "." : oldName + " will be replaced by " + newName + ".") + " This can't be undone.", "Merge", "Cancel");
+    if (!ok) { renaming = null; renderHistory(); renderSettings(); return; }
+  }
+  const nl = {}; Object.keys(lists).forEach(k => { const out = []; (lists[k] || []).forEach(x => { const y = x === oldName ? newName : x; if (!out.includes(y)) out.push(y); }); nl[k] = out; }); lists = nl;
   const changed = [];
   Object.values(sessions).forEach(s => {
-    if ((s.sets || []).some(x => x.ex === oldName && x.day === d)) {
-      const next = { date: s.date, sets: s.sets.map(x => x.ex === oldName && x.day === d ? { ...x, ex: newName } : x) };
+    if ((s.sets || []).some(x => x.ex === oldName)) {
+      const next = { date: s.date, sets: s.sets.map(x => x.ex === oldName ? { ...x, ex: newName } : x) };
       sessions[s.date] = next; changed.push(next);
     }
   });
-  if (mem.get("ex_" + d) === oldName) mem.set("ex_" + d, newName);
-  if (mem.get("pEx_" + d) === oldName) mem.set("pEx_" + d, newName);
+  days.forEach(k => { if (mem.get("ex_" + k) === oldName) mem.set("ex_" + k, newName); if (mem.get("pEx_" + k) === oldName) mem.set("pEx_" + k, newName); });
   if (expanded.has(oldName)) { expanded.delete(oldName); expanded.add(newName); }
   renaming = null; renderSelect(); renderHistory(); renderSettings();
   saveLists(); changed.forEach(s => writeSession(s.date, s));
-  toast("Renamed to " + newName + (changed.length ? " across " + changed.length + " session" + (changed.length > 1 ? "s" : "") : "") + "." + offlineNote());
+  toast((exists ? "Merged into " : "Renamed to ") + newName + (changed.length ? " across " + changed.length + " session" + (changed.length > 1 ? "s" : "") : "") + "." + offlineNote());
 }
 
 /* ---------- Excel ---------- */
@@ -1539,7 +1861,7 @@ function applyDocs(docs) {
         const nl = {}; days.forEach(d => { nl[d] = Array.isArray(v.lists?.[d]) ? v.lists[d].filter(x => typeof x === "string") : []; }); lists = nl;
       } else { // older format: one key per default day
         days = [...DEFAULT_DAYS];
-        const nl = {}; DEFAULT_DAYS.forEach(k => { const arr = Array.isArray(v[k]) ? v[k].filter(x => typeof x === "string") : []; nl[k] = v.full ? arr : [...BASE[k], ...arr.filter(x => !BASE[k].includes(x))]; }); lists = nl;
+        const nl = {}; DEFAULT_DAYS.forEach(k => { const arr = Array.isArray(v[k]) ? v[k].filter(x => typeof x === "string") : []; nl[k] = arr; }); lists = nl;
       }
     } else if (id === "prefs") { prefs = { ...DEFAULT_PREFS, ...v }; if (!Array.isArray(prefs.customThemes)) prefs.customThemes = []; }
     else if (id === "body") body = { entries: { ...(v.entries || {}) }, ...v, entries: { ...(v.entries || {}) } };
@@ -1548,8 +1870,15 @@ function applyDocs(docs) {
   if (!docs.prefs) prefs = { ...DEFAULT_PREFS };
   if (!docs.body) body = { entries: {} };
   sessions = next;
-  // keep any day that has sets but isn't in the list
-  allSets().forEach(s => { if (!days.includes(s.day)) { days = [...days, s.day]; lists = { ...lists, [s.day]: lists[s.day] || [] }; } });
+  hasListDoc = !!docs.exercises;
+  if (!docs.exercises) {
+    // no saved list: rebuild it from the sets they've logged (older accounts); brand-new accounts start empty
+    const sets = allSets().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.t - b.t);
+    if (sets.length) {
+      const nd = [], nl = {}; sets.forEach(x => { if (!nd.includes(x.day)) { nd.push(x.day); nl[x.day] = []; } if (!nl[x.day].includes(x.ex)) nl[x.day].push(x.ex); });
+      days = nd; lists = nl; if (uid) saveLists();
+    } else { days = []; lists = {}; }
+  }
   if (!renaming && !adding && !dayEditing) renderAll(); else renderHint();
   if (!themeEditing) { paintTheme(); renderThemes(); }
   syncWake();
@@ -1606,6 +1935,15 @@ function wire() {
   $("weekDown").onclick = () => prefAdj("weekTarget", -1, 1, 7); $("weekUp").onclick = () => prefAdj("weekTarget", 1, 1, 7);
   $("awakeOn").onchange = () => { prefs = { ...prefs, keepAwake: $("awakeOn").checked }; savePrefs(); syncWake(); };
   $("celeOn").onchange = () => { prefs = { ...prefs, celebrate: $("celeOn").checked }; savePrefs(); };
+  $("changePlan").onclick = () => { $("menuClose").click(); setTimeout(() => openPlan("change"), 320); };
+  $("shareNew").onclick = () => sharePlan(null);
+  $("shareCustom").onsubmit = e => { e.preventDefault(); sharePlan($("shareCodeIn").value); };
+  $("shareUpdate").onclick = () => sharePlan(prefs.planCode);
+  $("shareStop").onclick = () => stopSharing();
+  $("shareCopy").onclick = async () => { try { await navigator.clipboard.writeText(prefs.planCode); $("shareMsg").classList.remove("err"); $("shareMsg").textContent = "Copied " + prefs.planCode + "."; } catch (e) { $("shareMsg").textContent = "Your code is " + prefs.planCode + "."; } };
+  $("addClose").onclick = () => closeAdd(); $("addBack").onclick = () => { if (addUI) { addUI.pick = null; addUI.eq = undefined; renderAdd(); } };
+  $("addDim").onclick = () => closeAdd();
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && addUI && $("ask").hidden) closeAdd(); else if (e.key === "Escape" && planUI && planUI.mode === "change" && $("ask").hidden) closePlan(); });
   $("tourAgain").onclick = () => { $("menuClose").click(); setTimeout(startTour, 350); };
   $("introOn").onchange = () => { prefs = { ...prefs, intro: $("introOn").checked }; savePrefs(); renderSettings(); };
   document.querySelectorAll("[data-ip]").forEach(b => b.onclick = () => { prefs = { ...prefs, introPeriod: b.dataset.ip }; savePrefs(); renderSettings(); });
@@ -1747,7 +2085,7 @@ async function start() {
   catch (e) { show("gate"); $("signin").disabled = true; $("gateMsg").textContent = "Couldn't load. Check your connection and reopen the app."; return; }
   be.onUser(u => {
     if (unsub) { unsub(); unsub = null; }
-    if (!u) { me = null; $("gateReset").hidden = true; $("gateMain").hidden = false; setEmMode("in"); uid = null; sessions = {}; days = [...DEFAULT_DAYS]; lists = clone(BASE); prefs = { ...DEFAULT_PREFS }; body = { entries: {} }; show("gate"); return; }
+    if (!u) { me = null; $("gateReset").hidden = true; $("gateMain").hidden = false; setEmMode("in"); uid = null; sessions = {}; days = []; lists = {}; prefs = { ...DEFAULT_PREFS }; planPending = false; body = { entries: {} }; show("gate"); return; }
     uid = u.uid; setMe(u); introPending = true;
     // keep the loading screen up until the log has loaded, then go straight to the intro (no flash of the main screen)
     show("loading"); renderTabs(); renderAll();

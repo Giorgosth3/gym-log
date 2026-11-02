@@ -464,6 +464,80 @@ body.dragging-ex .exgrid{touch-action:none}
 body.intro-open .chatbub{display:none}
 .srow.col{flex-direction:column;align-items:stretch;gap:8px}
 .srow[hidden]{display:none}
+/* plan picker */
+.plan{position:fixed;inset:0;z-index:58;background:var(--bg);color:var(--ink)}
+.planpanel{height:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.planbody{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 16px) max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 24px) max(16px,env(safe-area-inset-left,0px))}
+.planbody > *{flex-shrink:0}
+.phead{display:flex;align-items:center;gap:10px;min-height:40px}.pback{font-size:1.3rem}
+.pkick{font:700 .74rem var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.pbig{font:700 2rem/1 var(--display);text-transform:uppercase;margin:0}
+.plead{margin:0;color:var(--muted);font-size:.95rem}
+.reassure{background:color-mix(in srgb,var(--ok) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--ok) 45%,var(--line));border-radius:12px;padding:10px 12px;font-size:.88rem;line-height:1.35}
+.plancard{display:flex;flex-direction:column;align-items:stretch;gap:6px;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:var(--ink);font:inherit;cursor:pointer}
+.plancard.sel{border:2px solid var(--accent);padding:11px 13px;background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+.plancard .top{display:flex;justify-content:space-between;align-items:center;gap:8px}.plancard b{font:700 1.05rem var(--body)}
+.plancard .per{font:600 .75rem var(--num);color:var(--muted);background:var(--chip);border-radius:999px;padding:3px 9px;white-space:nowrap}
+.plancard .who{color:var(--muted);font-size:.85rem}
+.dchips{display:flex;flex-wrap:wrap;gap:6px}.dchips span{background:var(--chip);border-radius:999px;padding:3px 9px;font:600 .75rem var(--body)}
+.plancard.sel .dchips span{background:var(--accent);color:var(--accent-ink)}
+.plancard.scratch{border-style:dashed}.plancard.scratch.sel{border-style:solid}
+.pcode{align-self:center}
+.pcta{margin-top:6px}
+.dayblock{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.dayblock .dh{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-weight:700;border-bottom:1px solid var(--line)}
+.dayblock .dh small{color:var(--muted);font:600 .78rem var(--num)}
+.pex{display:flex;justify-content:space-between;gap:10px;padding:8px 14px;font-size:.92rem;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+.dayblock .dh + .pex{border-top:0}.pex i{font-style:normal;color:var(--muted);font-size:.78rem;text-align:right}
+.diff{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.diff .row{display:flex;justify-content:space-between;gap:8px;font-size:.92rem}.diff .row i{font-style:normal;color:var(--muted);font-size:.8rem;text-align:right}
+.diff .okc{color:var(--ok)}.tagnew{color:var(--accent);font-weight:700}.muted{color:var(--muted)}
+.lblx{font:700 .72rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.dchips.sug{gap:6px}.dchips.sug .chip{border:1px solid var(--line);cursor:pointer;color:var(--ink);font:600 .85rem var(--body)}
+.plan .ef input{text-transform:none}
+#planCodeIn{text-transform:uppercase;letter-spacing:.08em;font-family:var(--num)}
+/* add exercise sheet */
+.addsheet{position:fixed;inset:0;z-index:57}
+.adddim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.addpanel{position:absolute;left:0;right:0;bottom:0;top:calc(env(safe-area-inset-top,0px) + 40px);max-width:560px;margin:0 auto;background:var(--surface);color:var(--ink);border-radius:20px 20px 0 0;border-top:1px solid var(--line);display:flex;flex-direction:column;padding:10px 16px 0;box-shadow:0 -20px 50px rgba(0,0,0,.5)}
+.addhead{display:flex;align-items:center;gap:10px;padding:6px 0 10px}.addhead h2{flex:1;font-size:1.45rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.addbody{flex:1;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:10px;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 20px)}
+.addbody > *{flex-shrink:0}
+.srch2 input{width:100%;font:500 16px var(--body);padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);-webkit-appearance:none;appearance:none}
+.srch2 input:focus{border-color:var(--accent);outline:none}
+.addres{display:flex;flex-direction:column;gap:8px}
+.mchips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.mchips::-webkit-scrollbar{display:none}
+.mchips .chip{white-space:nowrap;border:1px solid var(--line);cursor:pointer;color:var(--muted);font:600 .85rem var(--body)}
+.mchips .chip.on,.eqpick .chip.on{background:var(--pressed);color:var(--pressed-ink);border-color:var(--pressed)}
+.res{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg)}
+.ri{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line)}.ri:first-child{border-top:0}
+.ri .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}.ri .nm b{font:600 .98rem var(--body);overflow-wrap:anywhere}
+.ri .tags{display:flex;gap:4px;flex-wrap:wrap}.ri .tags span{font:600 .7rem var(--body);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px}.ri .tags span.m{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.ri .last{font:600 .76rem var(--num);color:var(--ok)}
+.ri .add{width:36px;height:36px;flex-shrink:0;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font:700 1.3rem var(--body);cursor:pointer}
+.ri .add.done{background:var(--chip);color:var(--ok);font-size:1rem;cursor:default}
+.own{display:flex;text-align:left;width:100%;padding:12px;border:1px dashed var(--line);border-radius:14px;background:transparent;color:var(--ink);font:600 .95rem var(--body);cursor:pointer}
+.own small{display:block;color:var(--muted);font-weight:500;font-size:.8rem;margin-top:2px}
+.eqpick{display:flex;flex-wrap:wrap;gap:6px}.eqpick .chip{border:1px solid var(--line);cursor:pointer;color:var(--ink);font:600 .88rem var(--body)}
+.namebox{border:1.5px solid var(--accent);border-radius:12px;padding:12px 14px;background:var(--bg);font-weight:600}
+/* confirm dialog */
+.ask{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.ask[hidden]{display:none}
+.askbox{width:100%;max-width:400px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.askbox b{font:700 1.2rem var(--body)}.askbox p{margin:0;color:var(--muted);font-size:.95rem}
+.askcard{background:var(--bg);border-radius:12px;padding:10px 12px;font:600 .88rem var(--num);color:var(--ok)}
+.askbox .use{padding:12px;font-size:.95rem}
+/* settings: plan sharing */
+.sharebox{display:flex;flex-direction:column;gap:8px}
+.codebig{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.codebig b{font:700 1.6rem var(--num);letter-spacing:.12em;color:var(--accent)}
+.sharebox .btns{display:flex;gap:8px;flex-wrap:wrap}.sharebox .use{padding:9px 12px}
+#shareMsg:empty{display:none}
+#shareCodeIn{text-transform:uppercase}
+.oitem .addfrom{flex:1;height:40px;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;font:700 .95rem var(--body)}
+.oitem.armed button{flex:1 1 auto}
+.other-btn{margin-top:4px}
+body.planning .chatbub{display:none}
 /* guided tour */
 .tblock{position:fixed;inset:0;z-index:69;background:transparent;touch-action:none}
 .thole{position:fixed;z-index:70;border-radius:14px;box-shadow:0 0 0 200vmax rgba(0,0,0,.72);outline:2px solid var(--accent);outline-offset:2px;pointer-events:none;transition:all .25s ease}
@@ -675,6 +749,21 @@ body.touring .chatbub{z-index:19}
   </nav>
 
   <!-- Side menu: settings and tools -->
+  <div class="plan" id="plan" hidden role="dialog" aria-modal="true" aria-label="Pick a plan">
+    <div class="planpanel" id="planPanel"><div class="planbody" id="planBody"></div></div>
+  </div>
+  <div class="addsheet" id="addSheet" hidden role="dialog" aria-modal="true" aria-labelledby="addTitle">
+    <div class="adddim" id="addDim"></div>
+    <div class="addpanel">
+      <div class="grab"></div>
+      <div class="addhead"><button class="icon-btn" id="addBack" hidden aria-label="Back to the list">‹</button><h2 id="addTitle">Add</h2><button class="icon-btn" id="addClose" aria-label="Close">✕</button></div>
+      <div class="addbody" id="addBody"></div>
+    </div>
+  </div>
+  <div class="ask" id="ask" hidden role="alertdialog" aria-modal="true" aria-labelledby="askTitle">
+    <div class="askbox"><b id="askTitle"></b><p id="askText"></p><div class="askcard" id="askCard" hidden></div>
+      <button class="save" id="askOk">OK</button><button class="use" id="askNo">Cancel</button></div>
+  </div>
   <div class="intro" id="intro" hidden role="dialog" aria-modal="true" aria-label="Your week so far. Tap to start">
     <div class="introbody" id="introBody"></div>
   </div>
@@ -741,6 +830,19 @@ body.touring .chatbub{z-index:19}
           <div class="olist" id="dayList"></div>
           <div class="addrow" style="margin-top:0"><input type="text" id="newDay" placeholder="New day, e.g. Arms" aria-label="New workout day name"><button class="ghost" id="addDay" style="padding:10px 14px">Add</button></div>
           <span class="small">To change the order of exercises, press and hold an exercise on the Training tab and drag it.</span>
+          <button class="ghost" id="changePlan">Change plan</button>
+          <span class="lbl" style="margin-top:6px">Share my plan</span>
+          <div id="shareOff" class="sharebox">
+            <span class="small">Create a code friends can enter to copy your days and exercises. Your weights and history stay private.</span>
+            <button class="ghost" id="shareNew">Create a code</button>
+            <form class="addrow" id="shareCustom" style="margin-top:0" novalidate><input type="text" id="shareCodeIn" placeholder="Or choose your own, e.g. GT3" aria-label="Choose your own plan code" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="14"><button class="ghost" type="submit" style="padding:10px 14px">Use</button></form>
+          </div>
+          <div id="shareOn" class="sharebox" hidden>
+            <div class="codebig"><span class="small">Your plan code</span><b id="shareCode"></b></div>
+            <div class="btns"><button class="use" id="shareCopy">Copy</button><button class="use" id="shareUpdate">Update with my current plan</button></div>
+            <button class="use" id="shareStop">Stop sharing</button>
+          </div>
+          <div class="toast" id="shareMsg" role="status"></div>
         </div>
       </details>
       <details class="grp" data-grp="data">

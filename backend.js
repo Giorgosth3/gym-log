@@ -49,6 +49,16 @@ export async function firebaseBackend(config, appCheckKey) {
       }, err);
     },
     set(uid, id, data) { return F.setDoc(F.doc(col(uid), id), data); },
+    // shared plans: plans/{CODE}, readable by any signed-in user who knows the code, writable only by its owner
+    async getPlan(code) { const s = await F.getDoc(F.doc(db, "plans", code)); return s.exists() ? s.data() : null; },
+    claimPlan(uid, code, data) {
+      return F.runTransaction(db, async tx => {
+        const ref = F.doc(db, "plans", code), s = await tx.get(ref);
+        if (s.exists() && s.data().owner !== uid) { const e = new Error("taken"); e.code = "taken"; throw e; }
+        tx.set(ref, { ...data, owner: uid });
+      });
+    },
+    deletePlan(code) { return F.deleteDoc(F.doc(db, "plans", code)); },
     del(uid, id) { return F.deleteDoc(F.doc(col(uid), id)); },
     // AI coach: Gemini through Firebase AI Logic (no server needed). Loaded only when the chat is first used.
     async chatStream(history, text, system) {
@@ -96,6 +106,14 @@ export function mockBackend() {
     subscribe(uid, cb) { dataCbs.push(cb); setTimeout(() => cb(JSON.parse(JSON.stringify(st.docs)), false), 30); return () => {}; },
     async set(uid, id, data) { st.docs[id] = JSON.parse(JSON.stringify(data)); save(); },
     async del(uid, id) { delete st.docs[id]; save(); },
+    // shared plans live outside any one account (one list for every test user)
+    async getPlan(code) { const all = JSON.parse(localStorage.getItem("gymlog_plans") || "{}"); return all[code] || null; },
+    async claimPlan(uid, code, data) {
+      const all = JSON.parse(localStorage.getItem("gymlog_plans") || "{}");
+      if (all[code] && all[code].owner !== uid) { const e = new Error("taken"); e.code = "taken"; throw e; }
+      all[code] = { ...data, owner: uid }; localStorage.setItem("gymlog_plans", JSON.stringify(all));
+    },
+    async deletePlan(code) { const all = JSON.parse(localStorage.getItem("gymlog_plans") || "{}"); delete all[code]; localStorage.setItem("gymlog_plans", JSON.stringify(all)); },
     // test coach: echoes a canned answer in chunks. "?fail=quota" / "?fail=setup" simulate errors.
     async chatStream(history, text) {
       const f = new URLSearchParams(location.search).get("fail");
