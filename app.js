@@ -753,8 +753,8 @@ function weekStreak() {
   return { streak: n + (doneNow ? 1 : 0), prev: n, thisCount, T, doneNow, thisMon, wd };
 }
 let introTimer = null, introShownAt = 0;
-function showIntro() {
-  if (prefs.intro === false || !$("main") || $("main").hidden) return;
+function showIntro(launch) {
+  if (prefs.intro === false || (!launch && $("main").hidden)) return;
   if (/[?&]mock\b/.test(location.search) && /[?&]nointro\b/.test(location.search)) return; // automated tests only
   const st = weekStreak(), p = PERIODS[prefs.introPeriod] ? prefs.introPeriod : "month", from = periodStart(p);
   const workouts = [...st.wd].filter(d => d >= from && d <= todayISO()).length, pbs = pbCount(from);
@@ -780,7 +780,8 @@ function showIntro() {
   wkc.append(lb, row, el("span", "imuted small", note)); box.appendChild(wkc);
   box.appendChild(el("span", "imuted small", "Tap anywhere to start"));
   const ov = $("intro"); ov.hidden = false; document.body.classList.add("intro-open"); introShownAt = Date.now();
-  requestAnimationFrame(() => ov.classList.add("show"));
+  if (launch) { ov.classList.add("instant", "show"); requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.remove("instant"))); }
+  else requestAnimationFrame(() => ov.classList.add("show"));
   clearTimeout(introTimer); introTimer = setTimeout(closeIntro, 4000);
 }
 function closeIntro() {
@@ -788,7 +789,12 @@ function closeIntro() {
   ov.classList.remove("show"); document.body.classList.remove("intro-open");
   setTimeout(() => { ov.hidden = true; }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
 }
-let introPending = false, hiddenSince = 0;
+let introPending = false, hiddenSince = 0, firstDataTimer = null;
+function revealMain() {
+  introPending = false; clearTimeout(firstDataTimer);
+  showIntro(true); // covers the screen first (if switched on)…
+  show("main"); renderTabs(); renderAll(); // …then the main screen is built underneath it
+}
 // show on every launch, and when coming back to the app after 30+ minutes away
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { hiddenSince = Date.now(); return; }
@@ -1436,7 +1442,7 @@ function applyDocs(docs) {
   $("status").textContent = n + " session" + (n === 1 ? "" : "s") + (b ? " and " + b + " weigh-in" + (b === 1 ? "" : "s") : "") + " saved · private to you";
   $("sumData").textContent = n + " session" + (n === 1 ? "" : "s");
   if (me) guestNag();
-  if (introPending) { introPending = false; showIntro(); }
+  if (introPending) revealMain();
 }
 
 /* ---------- wiring ---------- */
@@ -1615,7 +1621,9 @@ async function start() {
     if (unsub) { unsub(); unsub = null; }
     if (!u) { me = null; $("gateReset").hidden = true; $("gateMain").hidden = false; setEmMode("in"); uid = null; sessions = {}; days = [...DEFAULT_DAYS]; lists = clone(BASE); prefs = { ...DEFAULT_PREFS }; body = { entries: {} }; show("gate"); return; }
     uid = u.uid; setMe(u); introPending = true;
-    show("main"); renderTabs(); renderAll();
+    // keep the loading screen up until the log has loaded, then go straight to the intro (no flash of the main screen)
+    show("loading"); renderTabs(); renderAll();
+    clearTimeout(firstDataTimer); firstDataTimer = setTimeout(() => { if (introPending) revealMain(); }, 5000);
     unsub = be.subscribe(uid, applyDocs, () => { $("status").textContent = "Lost connection to your log. Reopen the app to reconnect."; });
   });
   if (!mock && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

@@ -420,10 +420,22 @@ input,select,textarea{font-size:max(16px,1em)}
 .exb.lifted{position:relative;z-index:4;box-shadow:0 12px 30px rgba(0,0,0,.45);border-color:var(--accent);transition:none;cursor:grabbing}
 body.dragging-ex{-webkit-user-select:none;user-select:none}
 body.dragging-ex .exgrid{touch-action:none}
+/* loading screen */
+.splash{position:fixed;inset:0;z-index:55;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.splash[hidden]{display:none}
+.splash img{width:88px;height:88px;border-radius:22px;animation:spop .45s ease both}
+.splashname{font:700 2.6rem/1 var(--display);text-transform:uppercase;letter-spacing:.03em;color:var(--ink);animation:sfade .45s .1s ease both}
+.splashbar{width:140px;height:4px;border-radius:2px;background:var(--chip);overflow:hidden;animation:sfade .3s .25s ease both}
+.splashbar i{display:block;width:40%;height:100%;border-radius:2px;background:var(--accent);animation:sslide 1.1s ease-in-out infinite}
+@keyframes spop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes sfade{from{opacity:0}to{opacity:1}}
+@keyframes sslide{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
+@media (prefers-reduced-motion:reduce){.splash img,.splashname,.splashbar,.splashbar i{animation:none}}
 /* intro */
 .intro{position:fixed;inset:0;z-index:60;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:calc(env(safe-area-inset-top,0px) + 24px) 24px calc(env(safe-area-inset-bottom,0px) + 24px);opacity:0;transition:opacity .25s ease;cursor:pointer}
 .intro.show{opacity:1}
+.intro.instant,.intro.instant .introbody{transition:none}
 .introbody{width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;transform:translateY(12px);transition:transform .35s ease}
 .intro.show .introbody{transform:none}
 .iemoji{font-size:3.6rem;line-height:1;animation:ipop .5s ease both}
@@ -539,7 +551,11 @@ body.intro-open .chatbub{display:none}
  </div>
 </div>
 
-<div class="wrap" id="loading"><div class="empty">Loading…</div></div>
+<div class="splash" id="loading" role="status" aria-label="Loading">
+  <img src="icons/icon-192.png" alt="">
+  <div class="splashname">Gym Log</div>
+  <div class="splashbar"><i></i></div>
+</div>
 
 <div class="wrap" id="main" hidden>
   <div class="topbar">
