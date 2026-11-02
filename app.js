@@ -9,7 +9,7 @@ const BASE = {
   Legs: ["Hack squat", "Hamstring curls", "Leg extensions (aristera)", "Calves"],
   Shoulders: ["Shoulder press", "Lateral raises machine", "Face pulls"]
 };
-const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null, weekTarget: 4, keepAwake: true, celebrate: true };
+const DEFAULT_PREFS = { units: "kg", restOn: true, restSec: 90, goal: null, weekTarget: 4, keepAwake: true, celebrate: true, intro: true, introPeriod: "month" };
 const KG_LB = 2.20462;
 
 /* ---------- helpers ---------- */
@@ -639,6 +639,9 @@ function renderSettings() {
   $("weekLbl").textContent = String(prefs.weekTarget);
   $("awakeOn").checked = prefs.keepAwake !== false;
   $("celeOn").checked = prefs.celebrate !== false;
+  $("introOn").checked = prefs.intro !== false;
+  document.querySelectorAll("[data-ip]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.ip === (prefs.introPeriod || "month"))));
+  $("introPRow").hidden = prefs.intro === false;
   $("sumTr").textContent = U() + " · rest " + (prefs.restOn ? fmtSec(prefs.restSec) : "off");
   $("sumDays").textContent = days.length + " day" + (days.length === 1 ? "" : "s");
   // workout days
@@ -663,6 +666,86 @@ function renderSettings() {
   });
 }
 function moveDay(i, dir) { const a = [...days]; [a[i], a[i + dir]] = [a[i + dir], a[i]]; days = a; saveLists(); renderDayBtns(); renderSettings(); }
+/* ---------- intro: weekly streak + this period's workouts and personal bests ---------- */
+// A workout = sets on at least 2 different exercises that date (or 1, for a workout day that only has 1 exercise).
+function workoutDates() {
+  const out = new Set();
+  Object.values(sessions).forEach(ss => {
+    const sets = working(ss.sets || []); if (!sets.length) return;
+    const ex = new Set(sets.map(x => x.ex));
+    if (ex.size >= 2 || sets.some(x => exercisesFor(x.day).length === 1)) out.add(ss.date);
+  });
+  return out;
+}
+const PERIODS = { week: "this week", month: "this month", year: "this year", all: "all time" };
+function periodStart(p) {
+  const n = new Date();
+  if (p === "week") return isoOf(mondayOf(n));
+  if (p === "year") return n.getFullYear() + "-01-01";
+  if (p === "all") return "0000";
+  return isoOf(new Date(n.getFullYear(), n.getMonth(), 1));
+}
+// personal bests set within the period (heavier than ever before, or more reps at the heaviest weight)
+function pbCount(from) {
+  const best = {}; let n = 0;
+  working(allSets()).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.t - b.t).forEach(x => {
+    const b = best[x.ex];
+    if (b && (x.w > b.w || (x.w === b.w && x.r > b.r))) { if (x.date >= from) n++; }
+    if (!b || x.w > b.w || (x.w === b.w && x.r > b.r)) best[x.ex] = x;
+  });
+  return n;
+}
+function weekStreak() {
+  const wd = workoutDates(), T = prefs.weekTarget || 4, inWeek = mon => { let c = 0; for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(d.getDate() + i); if (wd.has(isoOf(d))) c++; } return c; };
+  const thisMon = mondayOf(new Date()), thisCount = inWeek(thisMon);
+  let n = 0; const m = new Date(thisMon);
+  for (;;) { m.setDate(m.getDate() - 7); if (inWeek(m) >= T) n++; else break; if (n > 520) break; }
+  const doneNow = thisCount >= T;
+  return { streak: n + (doneNow ? 1 : 0), prev: n, thisCount, T, doneNow, thisMon, wd };
+}
+let introTimer = null, introShownAt = 0;
+function showIntro() {
+  if (prefs.intro === false || !$("main") || $("main").hidden) return;
+  if (/[?&]mock\b/.test(location.search) && /[?&]nointro\b/.test(location.search)) return; // automated tests only
+  const st = weekStreak(), p = PERIODS[prefs.introPeriod] ? prefs.introPeriod : "month", from = periodStart(p);
+  const workouts = [...st.wd].filter(d => d >= from && d <= todayISO()).length, pbs = pbCount(from);
+  const first = ((me && me.name) || "").trim().split(/\s+/)[0];
+  const box = $("introBody"); box.innerHTML = "";
+  const wk = n => n + " week" + (n === 1 ? "" : "s");
+  if (st.streak > 0) {
+    box.appendChild(el("div", "iemoji", "🎯"));
+    const h = el("div", "ibig"); h.append(document.createTextNode(wk(st.streak)), el("br"), el("span", "acc", "on target")); box.appendChild(h);
+    box.appendChild(el("p", "imuted", "You hit your " + st.T + " workout" + (st.T === 1 ? "" : "s") + " a week, " + wk(st.streak) + " in a row. Keep it going" + (first ? ", " + first : "") + "!"));
+  } else {
+    box.appendChild(el("div", "iemoji", "💪"));
+    const h = el("div", "ibig"); h.append(document.createTextNode("Let's start"), el("br"), el("span", "acc", "a streak")); box.appendChild(h);
+    box.appendChild(el("p", "imuted", "Hit " + st.T + " workout" + (st.T === 1 ? "" : "s") + " this week to start your streak."));
+  }
+  const grid = el("div", "istats"), stat = (v, l, cls) => { const c = el("div", "card istat"); c.append(el("b", cls || null, String(v)), el("span", null, l)); return c; };
+  grid.append(stat(workouts, (workouts === 1 ? "workout " : "workouts ") + PERIODS[p]), stat(pbs, (pbs === 1 ? "personal best " : "personal bests ") + PERIODS[p] + " 🏆", "gold"));
+  box.appendChild(grid);
+  const wkc = el("div", "card iweek"), lb = el("span", "k", "This week · " + st.thisCount + " of " + st.T), row = el("div", "wdays");
+  ["M", "T", "W", "T", "F", "S", "S"].forEach((d, i) => { const x = new Date(st.thisMon); x.setDate(x.getDate() + i); const iso = isoOf(x); const sp = el("span", st.wd.has(iso) ? "on" : (iso === todayISO() ? "today" : null), d); row.appendChild(sp); });
+  const left = st.T - st.thisCount;
+  const note = st.doneNow ? "Target hit this week ✓" : left + " more " + (st.prev > 0 ? "to keep it going" : "to start your streak");
+  wkc.append(lb, row, el("span", "imuted small", note)); box.appendChild(wkc);
+  box.appendChild(el("span", "imuted small", "Tap anywhere to start"));
+  const ov = $("intro"); ov.hidden = false; document.body.classList.add("intro-open"); introShownAt = Date.now();
+  requestAnimationFrame(() => ov.classList.add("show"));
+  clearTimeout(introTimer); introTimer = setTimeout(closeIntro, 4000);
+}
+function closeIntro() {
+  clearTimeout(introTimer); const ov = $("intro"); if (ov.hidden) return;
+  ov.classList.remove("show"); document.body.classList.remove("intro-open");
+  setTimeout(() => { ov.hidden = true; }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
+}
+let introPending = false, hiddenSince = 0;
+// show on every launch, and when coming back to the app after 30+ minutes away
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { hiddenSince = Date.now(); return; }
+  if (hiddenSince && Date.now() - hiddenSince > 30 * 60 * 1000 && uid) showIntro();
+});
+
 /* ---------- phone Back button closes the chat / settings instead of leaving the app ---------- */
 const layerClosers = {};
 let ignorePop = 0;
@@ -1303,6 +1386,7 @@ function applyDocs(docs) {
   $("status").textContent = n + " session" + (n === 1 ? "" : "s") + (b ? " and " + b + " weigh-in" + (b === 1 ? "" : "s") : "") + " saved · private to you";
   $("sumData").textContent = n + " session" + (n === 1 ? "" : "s");
   if (me) guestNag();
+  if (introPending) { introPending = false; showIntro(); }
 }
 
 /* ---------- wiring ---------- */
@@ -1350,6 +1434,10 @@ function wire() {
   $("weekDown").onclick = () => prefAdj("weekTarget", -1, 1, 7); $("weekUp").onclick = () => prefAdj("weekTarget", 1, 1, 7);
   $("awakeOn").onchange = () => { prefs = { ...prefs, keepAwake: $("awakeOn").checked }; savePrefs(); syncWake(); };
   $("celeOn").onchange = () => { prefs = { ...prefs, celebrate: $("celeOn").checked }; savePrefs(); };
+  $("introOn").onchange = () => { prefs = { ...prefs, intro: $("introOn").checked }; savePrefs(); renderSettings(); };
+  document.querySelectorAll("[data-ip]").forEach(b => b.onclick = () => { prefs = { ...prefs, introPeriod: b.dataset.ip }; savePrefs(); renderSettings(); });
+  $("intro").onclick = closeIntro;
+  document.addEventListener("keydown", e => { if (!$("intro").hidden && (e.key === "Escape" || e.key === "Enter" || e.key === " ")) { e.preventDefault(); closeIntro(); } });
   $("cele").addEventListener("click", e => { if (!e.target.closest(".cbtn")) closeCele(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("cele").hidden) closeCele(); });
   const restAdj = d => { prefs = { ...prefs, restSec: Math.min(600, Math.max(15, prefs.restSec + d)) }; $("restSecLbl").textContent = fmtSec(prefs.restSec); savePrefs(); };
@@ -1476,7 +1564,7 @@ async function start() {
   be.onUser(u => {
     if (unsub) { unsub(); unsub = null; }
     if (!u) { me = null; $("gateReset").hidden = true; $("gateMain").hidden = false; setEmMode("in"); uid = null; sessions = {}; days = [...DEFAULT_DAYS]; lists = clone(BASE); prefs = { ...DEFAULT_PREFS }; body = { entries: {} }; show("gate"); return; }
-    uid = u.uid; setMe(u);
+    uid = u.uid; setMe(u); introPending = true;
     show("main"); renderTabs(); renderAll();
     unsub = be.subscribe(uid, applyDocs, () => { $("status").textContent = "Lost connection to your log. Reopen the app to reconnect."; });
   });

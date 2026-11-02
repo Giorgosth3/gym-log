@@ -406,6 +406,32 @@ input,select,textarea{font-size:max(16px,1em)}
 .exb.lifted{position:relative;z-index:4;box-shadow:0 12px 30px rgba(0,0,0,.45);border-color:var(--accent);transition:none;cursor:grabbing}
 body.dragging-ex{-webkit-user-select:none;user-select:none}
 body.dragging-ex .exgrid{touch-action:none}
+/* intro */
+.intro{position:fixed;inset:0;z-index:60;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:calc(env(safe-area-inset-top,0px) + 24px) 24px calc(env(safe-area-inset-bottom,0px) + 24px);opacity:0;transition:opacity .25s ease;cursor:pointer}
+.intro.show{opacity:1}
+.introbody{width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;transform:translateY(12px);transition:transform .35s ease}
+.intro.show .introbody{transform:none}
+.iemoji{font-size:3.6rem;line-height:1;animation:ipop .5s ease both}
+@keyframes ipop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+.ibig{font:700 3.2rem/.95 var(--display);text-transform:uppercase;letter-spacing:.02em}.ibig .acc{color:var(--accent)}
+.imuted{margin:0;color:var(--muted);font-size:1.05rem;max-width:30ch}.imuted.small{font-size:.85rem}
+.istats{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+.istat{align-items:center;gap:2px;padding:14px 10px;text-align:center}.istat b{font:700 2rem var(--num)}.istat b.gold{color:#f5c542}.istat span{color:var(--muted);font-size:.9rem}
+:root[data-theme="light"] .istat b.gold,:root[data-theme="ael-yellow"] .istat b.gold,:root[data-theme="ael-soft"] .istat b.gold{color:#b7791f}
+@media (prefers-color-scheme: light){:root:not([data-theme]) .istat b.gold{color:#b7791f}}
+.iweek{width:100%;gap:8px;text-align:left}
+.iweek .k{font:700 .75rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.wdays{display:flex;gap:6px}.wdays span{flex:1;max-width:40px;height:34px;border-radius:9px;background:var(--chip);display:flex;align-items:center;justify-content:center;font:600 .8rem var(--num);color:var(--muted)}
+.wdays span.on{background:var(--accent);color:var(--accent-ink)}.wdays span.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.ibar{position:absolute;left:24px;right:24px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);height:3px;border-radius:2px;background:var(--chip);overflow:hidden;max-width:400px;margin:0 auto}
+.ibar i{display:block;height:100%;width:0;background:var(--accent)}
+.intro.show .ibar i{animation:ifill 4s linear forwards}
+@keyframes ifill{to{width:100%}}
+@media (prefers-reduced-motion:reduce){.intro,.introbody{transition:none}.iemoji{animation:none}.intro.show .ibar i{animation:none;width:100%}}
+body.intro-open .chatbub{display:none}
+.srow.col{flex-direction:column;align-items:stretch;gap:8px}
+.srow[hidden]{display:none}
 /* help bubble */
 .chatbub{position:fixed;z-index:19;left:calc(100vw - 64px);top:calc(100dvh - 150px);width:52px;height:52px;border-radius:50%;border:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;background:var(--bub-bg,var(--ink));color:var(--bub-fg,var(--bg));
@@ -599,6 +625,10 @@ body.dragging-ex .exgrid{touch-action:none}
   </nav>
 
   <!-- Side menu: settings and tools -->
+  <div class="intro" id="intro" hidden role="dialog" aria-modal="true" aria-label="Your week so far. Tap to start">
+    <div class="introbody" id="introBody"></div>
+    <div class="ibar"><i></i></div>
+  </div>
   <button class="chatbub" id="chatBub" type="button" aria-label="Help: ask the AI coach (press and hold to move)">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11"/></svg><span class="bubtag">HELP</span>
   </button>
@@ -650,6 +680,8 @@ body.dragging-ex .exgrid{touch-action:none}
           <div class="srow"><span>Rest time</span><div class="mini"><button id="restDown" aria-label="Shorter rest">−</button><span id="restSecLbl">1:30</span><button id="restUp" aria-label="Longer rest">+</button></div></div>
           <div class="srow"><label for="celeOn">Celebrations <span class="small">(personal bests, workout done, weekly target, goal)</span></label><span class="switch"><input type="checkbox" id="celeOn"><span></span></span></div>
           <div class="srow"><label for="awakeOn">Keep screen on <span class="small">(while on Training)</span></label><span class="switch"><input type="checkbox" id="awakeOn"><span></span></span></div>
+          <div class="srow"><label for="introOn">Intro when opening the app <span class="small">(weekly streak, workouts &amp; personal bests)</span></label><span class="switch"><input type="checkbox" id="introOn"><span></span></span></div>
+          <div class="srow col" id="introPRow"><span id="ipLbl">Intro stats period</span><div class="seg" role="group" aria-labelledby="ipLbl"><button data-ip="week">Week</button><button data-ip="month">Month</button><button data-ip="year">Year</button><button data-ip="all">All time</button></div></div>
           <div class="srow"><span>Sessions per week</span><div class="mini"><button id="weekDown" aria-label="Fewer sessions">−</button><span id="weekLbl">4</span><button id="weekUp" aria-label="More sessions">+</button></div></div>
         </div>
       </details>
