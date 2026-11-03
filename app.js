@@ -189,6 +189,7 @@ function saveSet() {
   const v = parseFloat(String($("w").value).replace(",", ".")), r = parseInt($("r").value, 10);
   if (!(v >= 0) || !(r > 0)) { toast("Enter a weight and at least 1 rep.", true); return; }
   const date = $("date").value || todayISO(), ex = $("ex").value;
+  if (date > todayISO()) { toast("You can't log a set on a future day.", true); return; }
   if (!ex) { toast("Pick an exercise first.", true); return; }
   const w = toKg(v), wu = false, t = Date.now();
   const prevSets = working(allSets().filter(s => s.ex === ex));
@@ -629,7 +630,9 @@ function renderBody() {
 function saveWeighIn() {
   const v = parseFloat(String($("bw").value).replace(",", "."));
   if (!(v > 0)) { toast("Enter your weight first.", true); return; }
-  const d = $("date").value || todayISO(), existed = body.entries[d] != null;
+  const d = $("date").value || todayISO();
+  if (d > todayISO()) { toast("You can't log a weigh-in on a future day.", true); return; }
+  const existed = body.entries[d] != null;
   const ds0 = bodyDates(), start = ds0.length ? body.entries[ds0[0]] : null;
   body = { ...body, entries: { ...body.entries, [d]: toKg(v) } };
   saveBody(); renderBody(); toast((existed ? "Updated " : "Saved ") + longDate(d) + ": " + trim(v) + U() + offlineNote());
@@ -2416,9 +2419,13 @@ async function gLeave(g) {
 
 /* ---------- wiring ---------- */
 function wire() {
-  $("date").value = todayISO();
+  $("date").value = todayISO(); $("date").max = todayISO();
+  // no logging ahead: the calendar stops at today (and today moves on if the app stays open past midnight)
+  const keepMax = () => { $("date").max = todayISO(); if ($("date").value > todayISO()) { $("date").value = todayISO(); renderDateLbl(); renderUnits(); renderPane(); } };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) keepMax(); }); $("date").addEventListener("focus", keepMax);
   document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-  $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO(); renderDateLbl(); renderUnits(); renderPane(); };
+  $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO();
+    if ($("date").value > todayISO()) { $("date").value = todayISO(); toast("You can't log a future day. Showing today.", true); } renderDateLbl(); renderUnits(); renderPane(); };
   renderDateLbl();
   document.querySelectorAll("[data-pview]").forEach(b => b.onclick = () => { mem.set("pView", b.dataset.pview); renderProgress(); });
 
