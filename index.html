@@ -698,7 +698,13 @@ body.touring .chatbub{z-index:19}
 .rkh{font:700 2.2rem/1 var(--display);text-transform:uppercase;margin:0}
 .rkpick{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .rkopt{background:#181c21;border:2px solid var(--line);border-radius:18px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:6px;color:#eef1f4;font:inherit;cursor:pointer}
-.rkopt.on{border-color:var(--accent)}.rkopt svg{height:280px;width:auto;max-width:100%}
+.rkopt{position:relative;padding-top:44px}
+.rkopt::before{content:"";position:absolute;top:12px;left:50%;margin-left:-13px;width:26px;height:26px;border-radius:50%;border:3px solid #5f6b76;box-sizing:border-box}
+.rkopt.on{border:3px solid var(--accent);animation:rkpop .28s ease}.rkopt.on::before{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 0 6px,transparent 7px)}
+.rkopt:not(.on){opacity:.75}.rkopt:not(.on) svg path[data-m]{fill:#2b3139}.rkopt:not(.on) b{color:#a9b4bf}
+@keyframes rkpop{0%{transform:scale(.96)}60%{transform:scale(1.03)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.rkopt.on{animation:none}}
+.rkopt svg{height:280px;width:auto;max-width:100%}
 .rkreveal{background:#121518;border-radius:16px;display:flex;justify-content:center;padding:10px}.rkreveal svg{height:330px;width:auto}
 .rkbig{font:700 1.5rem/1.1 var(--display);text-transform:uppercase;margin:0;text-align:center}
 .celemap{display:flex;justify-content:center;background:#121518;border-radius:12px;padding:6px 0}.celemap svg{height:150px;width:auto}

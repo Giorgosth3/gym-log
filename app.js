@@ -2631,10 +2631,10 @@ function renderRkFlow() {
   const btn = (cls, t, f) => { const x = el("button", cls, t); x.type = "button"; x.onclick = f; return x; };
   if (rkFlow.step === "figure") {
     b.append(el("span", "rkk acc", "New · Your muscle map"), el("h2", "rkh", "Choose your figure"), el("p", "muted", "It's just how your muscle map looks. It doesn't change your ranks, and you can switch any time in Settings."));
-    const pv = Object.fromEntries(MUSCLE_KEYS.map(k => [k, 3])), row = el("div", "rkpick");
+    const pv = Object.fromEntries(MUSCLE_KEYS.map(k => [k, 3])), row = el("div", "rkpick"); row.setAttribute("role", "radiogroup"); row.setAttribute("aria-label", "Figure");
     [["m", "Male"], ["f", "Female"]].forEach(([v, n]) => {
       const o = btn("rkopt" + ((prefs.figure || "m") === v ? " on" : ""), "", () => { prefs = { ...prefs, figure: v }; renderRkFlow(); });
-      o.setAttribute("aria-pressed", String((prefs.figure || "m") === v));
+      o.setAttribute("role", "radio"); o.setAttribute("aria-checked", String((prefs.figure || "m") === v));
       const f = el("div"); f.innerHTML = bodySVG(pv, { sex: v, label: n + " figure" }); o.append(f, el("b", null, n)); row.appendChild(o);
     });
     b.append(row, btn("save", "Continue", () => { prefs = { ...prefs, figure: prefs.figure || "m" }; savePrefs(); rkFlow.step = needsTag().length ? "tag" : (rkFlow.R.total > 0 ? "reveal" : "done"); if (rkFlow.step === "done") endRkFlow(true); else renderRkFlow(); }));
