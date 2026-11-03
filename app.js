@@ -1,6 +1,7 @@
 import { firebaseConfig, appCheckSiteKey } from "./firebase-config.js";
 import { firebaseBackend, mockBackend } from "./backend.js";
 import { LIB, PLANS, EQ, MUSCLES } from "./library.js";
+import { MUSCLE_KEYS, MUSCLE_NAMES, LIB_MUSCLE, guessMuscle, TIER_N, TIER_C, tierOf, stepOf, stepName, levelPts, levelTitle, computeRanks, bodySVG } from "./ranks.js";
 
 /* ---------- defaults ---------- */
 const DEFAULT_DAYS = ["Push", "Pull", "Legs", "Shoulders"];
@@ -191,7 +192,7 @@ function saveSet() {
   const date = $("date").value || todayISO(), ex = $("ex").value;
   if (date > todayISO()) { toast("You can't log a set on a future day.", true); return; }
   if (!ex) { toast("Pick an exercise first.", true); return; }
-  const w = toKg(v), wu = false, t = Date.now();
+  const w = toKg(v), wu = false, t = Date.now(), rkBefore = prefs.rankIntro ? ranksNow() : null;
   const prevSets = working(allSets().filter(s => s.ex === ex));
   const prevBest = prevSets.length ? prevSets.reduce((a, s) => (s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a) : null;
   const firstOfDay = !working((sessions[date] || {}).sets || []).length;
@@ -212,6 +213,7 @@ function saveSet() {
   gSchedule(true);
   checkDayDone(date);
   if (firstOfDay) checkWeek(date);
+  rkAfterSet(rkBefore);
 }
 
 /* ---------- celebrations: personal best, workout complete, weekly target, goal ---------- */
@@ -252,7 +254,7 @@ const CELE = {
 };
 function nextCele() {
   const item = celeQueue.shift(); if (!item) return;
-  const { type, data } = item, def = CELE[type], card = $("celeCard"); card.innerHTML = "";
+  const { type, data } = item, def = type === "tier" ? { c: TIER_C[tierOf(data.idx)], icon: '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>' } : CELE[type], card = $("celeCard"); card.innerHTML = "";
   $("cele").style.setProperty("--c", def.c);
   const badge = el("div", "cbadge"); badge.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + def.icon + "</svg>";
   card.appendChild(badge);
@@ -270,6 +272,10 @@ function nextCele() {
     const dots = el("div", "cdots"); dots.setAttribute("aria-label", "Days trained this week");
     data.dots.forEach((on, i) => { const d = el("i", on ? "" : "off"); d.title = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]; dots.appendChild(d); });
     card.appendChild(dots); add("small", "Mon – Sun");
+  } else if (type === "tier") {
+    add("ckick", "New tier"); add("cbig", MUSCLE_NAMES[data.m] + " reached " + stepName(data.idx), "celeTitle");
+    const f = el("div", "celemap"); f.innerHTML = bodySVG(data.tiers, { back: ["triceps", "hams", "back"].includes(data.m), sex: prefs.figure === "f" ? "f" : "m", sel: data.m, label: MUSCLE_NAMES[data.m] }); card.appendChild(f);
+    add("csub", "Keep training it to climb higher.");
   } else if (type === "crown") {
     add("ckick", "#1 in " + data.group); add("cbig", fmtW(data.w) + " × " + data.r, "celeTitle"); add("csub", data.ex);
     add("cwas", "You took first place from " + data.from + ".");
@@ -578,6 +584,7 @@ function renderConsistency() {
 /* ---------- body weight ---------- */
 function bodyDates() { return Object.keys(body.entries || {}).sort(); }
 function renderBody() {
+  renderMe();
   const cur = $("date").value, ents = body.entries || {}, ds = bodyDates();
   renderUnits();
   if (document.activeElement !== $("bw")) {
@@ -653,6 +660,7 @@ function renderSettings() {
   $("celeOn").checked = prefs.celebrate !== false;
   $("introOn").checked = prefs.intro !== false;
   document.querySelectorAll("[data-ip]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.ip === (prefs.introPeriod || "month"))));
+  document.querySelectorAll("[data-fig]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.fig === (prefs.figure === "f" ? "f" : "m"))));
   $("introPRow").hidden = prefs.intro === false;
   $("sumTr").textContent = U() + " · rest " + (prefs.restOn ? fmtSec(prefs.restSec) : "off");
   $("sumDays").textContent = days.length + " day" + (days.length === 1 ? "" : "s");
@@ -823,6 +831,7 @@ function showIntro(launch) {
   const wkc = el("div", "card iweek"); box.appendChild(wkc);
   introWeek = { off: 0, st, wkc, first: [...st.wd].sort()[0] || todayISO() };
   renderIntroWeek();
+  rkNews().forEach(n => { const b = el("div", "gnews rknews"); b.style.setProperty("--tc", n.c); b.append(el("span", "gnicon", n.warn ? "⏳" : n.up ? "💪" : "📉")); const t = el("div"); t.append(el("b", null, n.t), el("small", null, n.warn ? "Train it to keep your rank." : n.up ? "See it on your Me tab." : "Train it to climb back (double points).")); b.appendChild(t); box.prepend(b); });
   box.appendChild(el("span", "imuted small", "Tap anywhere to start"));
   const ov = $("intro"); ov.hidden = false; ov.classList.remove("paused"); document.body.classList.add("intro-open"); introShownAt = Date.now();
   if (launch) { ov.classList.add("instant", "show"); requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.remove("instant"))); }
@@ -831,7 +840,7 @@ function showIntro(launch) {
 function closeIntro() {
   clearTimeout(introTimer); const ov = $("intro"); if (ov.hidden) return;
   ov.classList.remove("show"); document.body.classList.remove("intro-open");
-  setTimeout(() => { ov.hidden = true; if (planPending) openPlan("first"); else if (tourPending) startTour(); }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
+  setTimeout(() => { ov.hidden = true; if (planPending) openPlan("first"); else if (tourPending) startTour(); else if (tab === "body") renderMe(); }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 250);
 }
 let introPending = false, hiddenSince = 0, firstDataTimer = null, hasListDoc = false, planPending = false;
 function revealMain() {
@@ -1153,7 +1162,7 @@ const TOUR = [
   { tab: "progress", pview: "ex", sel: "#pvEx", t: "Progress: exercises", p: "Pick an exercise to see your strength trend, your personal best and a warning if you've stopped improving." },
   { tab: "progress", pview: "cons", sel: "#pvCons", t: "Progress: consistency", p: "A calendar of the days you trained and how many workouts you did each week against your target." },
   { tab: "group", sel: "#grp", t: "Group", p: "Make a private group with friends from your gym, vote in the exercises you all do, and see who lifts the heaviest. Your Training sets count automatically." },
-  { tab: "body", sel: "#pane-body .card", t: "Body weight", p: "Log your weight and set a goal. The 7-day average smooths out daily ups and downs. Hit your goal and you'll get a celebration." },
+  { tab: "body", sel: "#meTop .rkmapcard", t: "Me: your muscle ranks", p: "Every muscle earns a rank, from Bronze to Diamond, by training it and beating your records. Tap ? to see how it works. Your weigh-ins and goal weight are further down." },
   { tab: "training", sel: "#chatBub", round: true, t: "Ask the coach", p: "Tap HELP to ask how to use the app or how to do an exercise. Press and hold it to move it out of the way." },
   { tab: "training", sel: "#menuOpen", t: "Settings", p: "Your days & exercises, change plan, plan codes to share, units, rest timer, weekly target, colours, account and Excel export. This tour is in there too." },
   { tab: "training", k: "All set ✅", t: "Go lift!", p: "Log your first set and start your streak. Tap HELP if you get stuck.", btn: "Start", skip: "" }
@@ -1240,6 +1249,8 @@ const layerClosers = {
   tour: () => endTour(),
   plan: () => { if (planUI && planUI.mode === "change") { planUI = null; $("plan").hidden = true; document.body.classList.remove("menu-open", "planning"); } },
   add: () => reallyCloseAdd(),
+  rk: () => reallyCloseRk(),
+  rkf: () => { if (rkFlow) { rkFlow = null; $("rkFull").hidden = true; document.body.classList.remove("menu-open"); } },
   date: () => { $("dpick").hidden = true; },
   grp: () => { if (typeof gUI !== "undefined" && !["group", "home"].includes(gUI.view)) { gUI.view = "group"; gOpenVote = null; gProposing = false; if (tab === "group") renderGroup(); } }
 };
@@ -1258,7 +1269,7 @@ const CHAT_KEEP = 12;            // earlier messages sent along for context
 const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; never invent buttons that are not listed here):
 - Top bar: menu button (☰) opens Settings; the date button (top right) picks the day you're logging; a chat button opens this coach. After saving a set, a rest timer appears at the top: tap it for +30s or Skip.
 - Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders).
-- Bottom tabs: Training, History, Progress, Group, Body.
+- Bottom tabs: Training, History, Progress, Group, Me.
 - Training tab: exercise buttons for the chosen day. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
 - Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
 - Add an exercise: "+ Add exercise" at the end of the exercise buttons (or in Settings → Workout days & exercises, open a day). It searches the built-in list of 130+ exercises grouped by muscle with equipment versions, shows the user's own exercises first with their last result, and lets them type any name as their own. It asks "Did you mean…?" if a typed name is almost the same as an existing one, so history stays together.
@@ -1269,6 +1280,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Settings → Training: units kg/lbs, rest timer on/off and length, weekly session target, keep screen on, celebrations on/off. Settings → Colours: themes, including custom ones. Settings → Your data: Export to Excel, import sets from Excel. Settings → Account: sign out.
 - Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
 - Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
+- Me tab: your level, a muscle map (front/back, male or female figure, chosen in Settings) where each of 9 muscles (Chest, Back, Shoulders, Biceps, Triceps, Core, Quads, Hamstrings & glutes, Calves) has a rank: Bronze, Silver, Gold, Platinum, Diamond (each with steps I, II, III), then Legend. Points: +10 per day you do at least 2 sets for that muscle (max 3 days a week); a personal best (estimated 1-rep max, after the first 2 sessions of an exercise as baseline) gives 3 points per 1% stronger (3 to 15, max one per exercise per week). 14 days without training a muscle drops it one step, then one more step per extra week (never below Bronze I); double points while climbing back. Legend also needs 40 of the last 52 weeks trained. The ? button explains it; tap a muscle for details; 'Which muscle each exercise counts for' sets the muscle of your own exercises. Weigh-ins and goal weight are lower on the Me tab. Group members can see each other's muscle maps.
 - Progress tab: Exercises view (estimated 1-rep max chart, personal best, plateau alerts) and Consistency view (calendar, weekly sessions).
 - Body tab: log body weight, 7-day average, weekly rate, goal weight.
 - Wrong day: remove the set, change the date at the top right, save it again.
@@ -1764,6 +1776,7 @@ async function renameExercise(d, oldName, newName) {
   days.forEach(k => { if (mem.get("ex_" + k) === oldName) mem.set("ex_" + k, newName); if (mem.get("pEx_" + k) === oldName) mem.set("pEx_" + k, newName); });
   if (expanded.has(oldName)) { expanded.delete(oldName); expanded.add(newName); }
   renaming = null; renderSelect(); renderHistory(); renderSettings();
+  if ((prefs.muscles || {})[oldName] && !(prefs.muscles || {})[newName]) { const pm = { ...prefs.muscles, [newName]: prefs.muscles[oldName] }; delete pm[oldName]; prefs = { ...prefs, muscles: pm }; savePrefs(); }
   saveLists(); changed.forEach(s => writeSession(s.date, s)); gRename(oldName, newName);
   toast((exists ? "Merged into " : "Renamed to ") + newName + (changed.length ? " across " + changed.length + " session" + (changed.length > 1 ? "s" : "") : "") + "." + offlineNote());
 }
@@ -1934,6 +1947,7 @@ function myBestsFor(g) {
     const n = (x.links || {})[uid]; if (!n || (x.status !== "ranked" && x.status !== "pending")) return;
     const b = bestOf(n); if (b) out[id] = b;
   });
+  const R = ranksNow(); out._rk = Object.fromEntries(MUSCLE_KEYS.map(m => [m, R.muscles[m].idx])); out._fig = prefs.figure === "f" ? "f" : "m";
   return out;
 }
 function gBoard(gid, exId) {
@@ -2186,6 +2200,7 @@ function gGroupView(box, G) {
     const tt = el("span", "gvt"); tt.append(el("b", null, todo.length + (todo.length === 1 ? " exercise needs" : " exercises need") + " your vote"), el("small", null, todo.slice(0, 3).map(([, x]) => x.name).join(" · ")));
     c.append(tt, el("span", "muted", "›")); box.appendChild(c);
   }
+  gCrew(box, G);
   const rk = gRanked(g);
   if (!rk.length) {
     const c = el("div", "card"); c.append(el("b", null, "No ranked exercises yet"), el("p", "muted", "Propose an exercise from your plan. When every member votes yes, it gets a leaderboard, and your Training sets count automatically."));
@@ -2215,6 +2230,24 @@ function gGroupView(box, G) {
   });
   box.appendChild(c);
   box.appendChild(gBtn("ghost", "Exercise votes", () => gGo("votes")));
+}
+// everyone's muscle map + who holds the top tier on each muscle
+function gCrew(box, G) {
+  const g = G.d, ids = gOrder(g), c = el("div", "card"); c.appendChild(el("span", "gk", "The crew · muscle ranks"));
+  const grid = el("div", "gcrew");
+  ids.forEach(u => {
+    const r = ((G.b || {})[u] || {})._rk, cell = el("div", "gcm"), f = el("div");
+    f.innerHTML = bodySVG(Object.fromEntries(MUSCLE_KEYS.map(m => [m, tierOf((r || {})[m] || 0)])), { sex: ((G.b || {})[u] || {})._fig === "f" ? "f" : "m", label: gWho(g, u) + "'s muscle map" });
+    cell.append(f, el("b", null, gWho(g, u))); if (!r) cell.appendChild(el("small", null, "needs the app update"));
+    grid.appendChild(cell);
+  });
+  c.appendChild(grid);
+  const tops = MUSCLE_KEYS.map(m => { let best = 0, who = []; ids.forEach(u => { const v = (((G.b || {})[u] || {})._rk || {})[m] || 0; if (v > best) { best = v; who = [u]; } else if (v && v === best) who.push(u); }); return [m, best, who]; }).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  if (tops.length && ids.length > 1) {
+    c.appendChild(el("span", "gk", "Top rank per muscle"));
+    tops.forEach(([m, best, who]) => { const r = el("div", "grow"), n = el("span", "gxn"); n.append(el("b", null, MUSCLE_NAMES[m]), el("small", null, who.map(u => gWho(g, u)).join(" · "))); r.append(n, rkBadge(best)); c.appendChild(r); });
+  }
+  box.appendChild(c);
 }
 function gBoardView(box, G) {
   const g = G.d, id = gUI.ex, x = g.ex[id], rows = gBoard(gUI.gid, id);
@@ -2441,6 +2474,215 @@ async function gLeave(g) {
   gGo("group", { gid: myGroups()[0] || null }); toast("You left " + g.name + ".");
 }
 
+/* ---------- Me tab: muscle map + ranks ---------- */
+let libMusCache = null;
+// a muscle key, null = doesn't count (cardio / full body), undefined = not set yet (own exercise)
+function muscleOf(name) {
+  const pm = (prefs.muscles || {})[name]; if (pm) return pm === "none" ? null : pm;
+  if (!libMusCache) { libMusCache = {}; LIB.forEach(x => { libMusCache[squash(x.n)] = LIB_MUSCLE[x.m] || null; }); }
+  const k = squash(name); return k in libMusCache ? libMusCache[k] : undefined;
+}
+const needsTag = () => knownNames().filter(n => muscleOf(n) === undefined);
+const ranksNow = () => computeRanks(allSets(), n => muscleOf(n) || null, todayISO());
+const tierMap = R => Object.fromEntries(MUSCLE_KEYS.map(m => [m, R.muscles[m].tier]));
+const rkTest = () => /[?&]mock\b/.test(location.search) && /[?&]norank\b/.test(location.search);
+function rkBadge(idx, big) {
+  const t = tierOf(idx), c = TIER_C[t], b = el("span", "rkb" + (big ? " big" : ""));
+  b.style.setProperty("--tc", c);
+  b.appendChild(document.createTextNode((t === 5 ? "💎 " : t === 6 ? "🔥 " : "") + stepName(idx).toUpperCase()));
+  if (t > 0 && t < 6) { const p = el("span", "rkpips"); [1, 2, 3].forEach(i => p.appendChild(el("i", i <= stepOf(idx) ? "on" : ""))); b.appendChild(p); }
+  return b;
+}
+function rkMaps(R, sel, onTap) {
+  const w = el("div", "rkmaps"), fig = prefs.figure === "f" ? "f" : "m", t = tierMap(R);
+  [["Front", false], ["Back", true]].forEach(([lbl, back]) => {
+    const d = el("div", "rkfig"); d.innerHTML = bodySVG(t, { back, sex: fig, sel, label: lbl + " muscle map" });
+    d.appendChild(el("small", null, lbl.toUpperCase())); w.appendChild(d);
+  });
+  if (onTap) w.onclick = e => { const p = e.target.closest("[data-m]"); if (p) onTap(p.dataset.m); };
+  return w;
+}
+function renderMe() {
+  const box = $("meTop"); if (!box) return; box.innerHTML = "";
+  const R = ranksNow(), L = R.level, lo = levelPts(L), hi = levelPts(L + 1);
+  // level
+  const lc = el("div", "card rklevel"), top = el("div", "rkrow");
+  top.append(el("span", "rkk", "Level " + L + " · " + levelTitle(L)), el("span", "small", Math.round(R.total) + " / " + hi + " pts"));
+  const mid = el("div", "rkrow"); mid.appendChild(el("b", "rkname", firstName() || "You"));
+  const q = el("button", "rkq", "?"); q.type = "button"; q.setAttribute("aria-label", "How ranks work"); q.onclick = openRankHelp; mid.appendChild(q);
+  const bar = el("div", "rkbar"), fill = el("i"); fill.style.width = Math.min(100, Math.max(2, (R.total - lo) / (hi - lo) * 100)) + "%"; bar.appendChild(fill);
+  lc.append(top, mid, bar); box.appendChild(lc);
+  // map
+  const mc = el("div", "card rkmapcard"), mh = el("div", "rkrow"); mh.append(el("span", "rkk", "Your muscles"), el("span", "small", "Tap a muscle"));
+  mc.append(mh, rkMaps(R, null, openMuscle)); box.appendChild(mc);
+  // own exercises without a muscle
+  const nt = needsTag();
+  if (nt.length) {
+    const c = el("button", "card rkwarn"); c.type = "button"; c.onclick = () => openTagSheet(false);
+    const t = el("span"); t.append(el("b", null, nt.length + " exercise" + (nt.length === 1 ? " needs" : "s need") + " a muscle"), el("small", null, "They don't count towards ranks until you choose: " + nt.slice(0, 3).join(", ") + (nt.length > 3 ? "…" : "")));
+    c.append(el("span", "rkicon", "🏷️"), t, el("span", "muted", "›")); box.appendChild(c);
+  }
+  // about to fade
+  MUSCLE_KEYS.filter(m => R.muscles[m].dropIn != null && R.muscles[m].dropIn <= 4).sort((a, b) => R.muscles[a].dropIn - R.muscles[b].dropIn).slice(0, 2).forEach(m => {
+    const x = R.muscles[m], c = el("div", "card rkwarn fade");
+    const t = el("span"); t.append(el("b", null, MUSCLE_NAMES[m] + " drop" + (MUSCLE_NAMES[m].endsWith("s") ? "" : "s") + " to " + stepName(x.idx - 1) + " in " + x.dropIn + " day" + (x.dropIn === 1 ? "" : "s")), el("small", null, "Train it before then to keep " + stepName(x.idx) + "."));
+    c.append(el("span", "rkicon", "⏳"), t); box.appendChild(c);
+  });
+  // list
+  const lst = el("div", "card rklist");
+  [...MUSCLE_KEYS].sort((a, b) => R.muscles[b].idx - R.muscles[a].idx || R.muscles[b].pts - R.muscles[a].pts).forEach(m => {
+    const x = R.muscles[m], r = el("button", "rkli"); r.type = "button"; r.onclick = () => openMuscle(m);
+    const right = el("span", "rkright"); right.appendChild(rkBadge(x.idx));
+    const mb = el("span", "rkmini"), mf = el("i"); mf.style.width = (x.next ? Math.min(100, (x.pts - x.prev) / (x.next - x.prev) * 100) : 100) + "%"; mf.style.background = TIER_C[x.tier]; mb.appendChild(mf); right.appendChild(mb);
+    r.append(el("span", null, MUSCLE_NAMES[m]), right); lst.appendChild(r);
+  });
+  box.appendChild(lst);
+  const ed = el("button", "linkbtn", "Which muscle each exercise counts for ›"); ed.type = "button"; ed.onclick = () => openTagSheet(true); box.appendChild(ed);
+  if (!prefs.rankIntro && !rkTest() && tab === "body" && !$("main").hidden && $("rkFull").hidden && !tour && !tourPending && $("intro").hidden && $("plan").hidden) setTimeout(() => { if (!tour && $("intro").hidden && $("plan").hidden && tab === "body") startRankIntro(R); }, 250);
+}
+
+/* sheets (help, one muscle, exercise muscles) */
+let rkSheetOpen = false;
+function openRk(title, fill) {
+  $("rkTitle").textContent = title; const b = $("rkBody"); b.innerHTML = ""; fill(b); b.scrollTop = 0;
+  if (!rkSheetOpen) { rkSheetOpen = true; $("rkSheet").hidden = false; document.body.classList.add("menu-open"); pushLayer("rk"); }
+}
+function closeRk() { if (!rkSheetOpen) return; popLayer("rk"); reallyCloseRk(); }
+function reallyCloseRk() { if (!rkSheetOpen) return; rkSheetOpen = false; $("rkSheet").hidden = true; document.body.classList.remove("menu-open"); const f = rkAfterClose; rkAfterClose = null; if (f) f(); }
+let rkAfterClose = null;
+function helpRow(icon, title, text) { const r = el("div", "rkhelp"); r.appendChild(el("span", "rkicon", icon)); const t = el("div"); t.append(el("b", null, title), el("p", null, text)); r.appendChild(t); return r; }
+function openRankHelp() {
+  openRk("How ranks work", b => {
+    b.appendChild(helpRow("🗺️", "Every muscle has its own rank", "9 muscle groups, each climbing from Bronze to Diamond, then Legend. Colour = tier, dots = step (I · II · III)."));
+    const bs = el("div", "rkbadges"); [1, 4, 7, 10, 13, 16].forEach(i => bs.appendChild(rkBadge(i))); b.appendChild(bs);
+    b.appendChild(helpRow("💪", "Train it: +10 points", "Each day you do at least 2 sets for a muscle. Up to 3 days a week count, so rest days never hurt."));
+    b.appendChild(helpRow("🏆", "Get stronger: +3 to +15 points", "Beat your best on an exercise. The bigger the jump, the more points: 3 points for every 1% stronger (weight and reps both count)."));
+    const tb = el("div", "rktable"); [["25kg × 7 → 25kg × 8", "+2.7% · 8 pts"], ["25kg × 7 → 24kg × 10", "+3.8% · 11 pts"], ["25kg × 7 → 27.5kg × 7", "+10% · 15 pts (max)"]].forEach(([a, c]) => { const r = el("div"); r.append(el("span", null, a), el("b", null, c)); tb.appendChild(r); }); b.appendChild(tb);
+    b.appendChild(helpRow("📏", "Your first 2 sessions set your baseline", "The first two days you do an exercise just record where you start. Records count from the 3rd time."));
+    b.appendChild(helpRow("📅", "One record bonus per exercise per week", "Keeps it fair: one big jump can't be split into lots of small ones."));
+    b.appendChild(helpRow("⏳", "Skip it and it fades", "After 14 days without training a muscle it drops one step, then one more step for every extra week. It never falls below Bronze I, and you earn double points until you're back."));
+    b.appendChild(helpRow("🧭", "Roughly how long it takes", "Training a muscle about twice a week:"));
+    const tt = el("div", "rktable"); [[1, "first 3 weeks"], [4, "1–2 months"], [7, "3–4 months"], [10, "5–6 months"], [13, "8–10 months"], [16, "about a year (and 40 of the last 52 weeks trained)"]].forEach(([i, x]) => { const r = el("div"); r.append(rkBadge(i), el("span", null, x)); tt.appendChild(r); }); b.appendChild(tt);
+    b.appendChild(helpRow("⚖️", "It's about you, not the kg", "Ranks reward showing up and beating your own records, so everyone can reach Diamond. Who lifts the heaviest lives in your Group leaderboards."));
+    b.appendChild(helpRow("🏷️", "Which muscle counts?", "Library exercises already know. For exercises you added yourself, choose the muscle once (Me tab → Which muscle each exercise counts for)."));
+    b.appendChild(helpRow("⭐", "Your level", "Your total points across all muscles. Training every muscle levels you up fastest."));
+  });
+}
+function openMuscle(m) {
+  const R = ranksNow(), x = R.muscles[m];
+  openRk(MUSCLE_NAMES[m], b => {
+    const hd = el("div", "rkrow"); hd.append(rkBadge(x.idx, true), el("span", "small", Math.round(x.pts) + " pts")); b.appendChild(hd);
+    const fig = el("div", "rkone"); fig.innerHTML = bodySVG(tierMap(R), { back: ["triceps", "hams"].includes(m) || (m === "back"), sex: prefs.figure === "f" ? "f" : "m", sel: m, label: MUSCLE_NAMES[m] }); b.appendChild(fig);
+    if (x.next) {
+      const p = el("div"), bar = el("div", "rkbar"), f = el("i"); f.style.width = Math.min(100, (x.pts - x.prev) / (x.next - x.prev) * 100) + "%"; f.style.background = TIER_C[tierOf(x.idx + 1)]; bar.appendChild(f);
+      p.append(el("div", "small", Math.max(0, Math.ceil(x.next - x.pts)) + " points to " + stepName(x.idx + 1)), bar); b.appendChild(p);
+    } else b.appendChild(el("p", "small", "Top rank. Legendary. 🔥"));
+    const g = el("div", "rkstats");
+    [[x.since == null ? "Never" : x.since === 0 ? "Today" : x.since + (x.since === 1 ? " day" : " days"), "last trained"], [String(x.days4w), "training days · 4 wks"]].forEach(([v, l]) => { const c = el("div", "card"); c.append(el("b", null, v), el("span", null, l)); g.appendChild(c); });
+    b.appendChild(g);
+    if (x.dropIn != null) b.appendChild(el("p", "small" + (x.dropIn <= 4 ? " rkwarntext" : ""), "⏳ Drops to " + stepName(x.idx - 1) + " in " + x.dropIn + " day" + (x.dropIn === 1 ? "" : "s") + " if you don't train it."));
+    if (x.comeback) b.appendChild(el("p", "small", "🔁 Comeback: double points until you're back to your best rank."));
+    const exs = knownNames().filter(n => muscleOf(n) === m);
+    b.appendChild(el("span", "rkk", exs.length ? "Your " + MUSCLE_NAMES[m].toLowerCase() + " exercises" : "No exercises for this muscle yet"));
+    if (exs.length) { const ch = el("div", "rkchips"); exs.forEach(n => ch.appendChild(el("span", null, n))); b.appendChild(ch); }
+    else b.appendChild(el("p", "small", "Add one from the exercise library on the Training tab (+ Add exercise)."));
+  });
+}
+function muscleSelect(name, value) {
+  const s = el("select", "rksel"); s.setAttribute("aria-label", "Muscle for " + name);
+  [["", "Choose a muscle…"], ...MUSCLE_KEYS.map(k => [k, MUSCLE_NAMES[k]]), ["none", "Doesn't count (cardio / full body)"]].forEach(([v, t]) => { const o = el("option", null, t); o.value = v; s.appendChild(o); });
+  s.value = value || ""; return s;
+}
+// all=false: only exercises without a muscle; all=true: every exercise (to correct one)
+function fillTag(b, all, onDone) {
+  const names = all ? knownNames() : needsTag();
+  if (!names.length) { b.appendChild(el("p", "muted", "Every exercise already has a muscle.")); return; }
+  b.appendChild(el("p", "muted rkintro", all ? "Each exercise's sets count towards one muscle. Library exercises are set already; change any that look wrong." : "These are exercises you added yourself. Check the muscle we guessed for each one, so your sets count towards the right rank."));
+  const sels = [];
+  names.forEach(n => {
+    const row = el("div", "rktag"), cur = (prefs.muscles || {})[n] || (muscleOf(n) === null ? "none" : muscleOf(n)) || guessMuscle(n) || "";
+    row.appendChild(el("b", null, n)); const s = muscleSelect(n, cur); row.appendChild(s); sels.push([n, s]); b.appendChild(row);
+  });
+  const msg = el("p", "small gmsg"); b.appendChild(msg);
+  const go = el("button", "save", all ? "Save" : "Save muscles"); go.type = "button";
+  go.onclick = () => {
+    const miss = sels.filter(([, s]) => !s.value);
+    if (miss.length && !all) { msg.textContent = "Choose a muscle for " + miss.map(([n]) => n).join(", ") + " (or “Doesn't count”)."; return; }
+    const pm = { ...(prefs.muscles || {}) }; sels.forEach(([n, s]) => { if (s.value) pm[n] = s.value; });
+    prefs = { ...prefs, muscles: pm }; savePrefs(); toast("Saved. Your ranks are updated."); onDone();
+  };
+  b.appendChild(go);
+}
+function openTagSheet(all) { openRk(all ? "Exercise muscles" : "Which muscle?", b => fillTag(b, all, () => { closeRk(); renderMe(); })); }
+
+/* first time on the Me tab: figure → muscles for own exercises → reveal (existing users) → how it works */
+let rkFlow = null;
+function startRankIntro(R) {
+  if (prefs.rankIntro || !$("rkFull").hidden) return;
+  rkFlow = { step: "figure", R }; $("rkFull").hidden = false; document.body.classList.add("menu-open"); pushLayer("rkf"); renderRkFlow();
+}
+function endRkFlow(showHelp) {
+  rkFlow = null; $("rkFull").hidden = true; document.body.classList.remove("menu-open"); popLayer("rkf");
+  prefs = { ...prefs, rankIntro: true }; savePrefs(); rkSnapSave(ranksNow()); renderMe();
+  if (showHelp) setTimeout(openRankHelp, 150);
+}
+function renderRkFlow() {
+  const b = $("rkFullBody"); b.innerHTML = ""; $("rkFull").querySelector(".planpanel").scrollTop = 0;
+  const btn = (cls, t, f) => { const x = el("button", cls, t); x.type = "button"; x.onclick = f; return x; };
+  if (rkFlow.step === "figure") {
+    b.append(el("span", "rkk acc", "New · Your muscle map"), el("h2", "rkh", "Choose your figure"), el("p", "muted", "It's just how your muscle map looks. It doesn't change your ranks, and you can switch any time in Settings."));
+    const pv = Object.fromEntries(MUSCLE_KEYS.map(k => [k, 3])), row = el("div", "rkpick");
+    [["m", "Male"], ["f", "Female"]].forEach(([v, n]) => {
+      const o = btn("rkopt" + ((prefs.figure || "m") === v ? " on" : ""), "", () => { prefs = { ...prefs, figure: v }; renderRkFlow(); });
+      o.setAttribute("aria-pressed", String((prefs.figure || "m") === v));
+      const f = el("div"); f.innerHTML = bodySVG(pv, { sex: v, label: n + " figure" }); o.append(f, el("b", null, n)); row.appendChild(o);
+    });
+    b.append(row, btn("save", "Continue", () => { prefs = { ...prefs, figure: prefs.figure || "m" }; savePrefs(); rkFlow.step = needsTag().length ? "tag" : (rkFlow.R.total > 0 ? "reveal" : "done"); if (rkFlow.step === "done") endRkFlow(true); else renderRkFlow(); }));
+  } else if (rkFlow.step === "tag") {
+    b.append(el("span", "rkk acc", "One quick check"), el("h2", "rkh", "Which muscle?"));
+    fillTag(b, false, () => { rkFlow.R = ranksNow(); rkFlow.step = rkFlow.R.total > 0 ? "reveal" : "done"; if (rkFlow.step === "done") endRkFlow(true); else renderRkFlow(); });
+    b.appendChild(btn("use", "Skip for now", () => { rkFlow.step = rkFlow.R.total > 0 ? "reveal" : "done"; if (rkFlow.step === "done") endRkFlow(true); else renderRkFlow(); }));
+  } else if (rkFlow.step === "reveal") {
+    const R = rkFlow.R = ranksNow(), first = allSets().map(s => s.date).sort()[0] || todayISO();
+    const months = Math.max(1, Math.round((Date.now() - new Date(first).getTime()) / (30.4 * 864e5)));
+    b.append(el("span", "rkk acc", "Your training so far"), el("h2", "rkh", "We looked at " + (months < 2 ? "your training" : "your " + months + " months of training") + "…"));
+    const f = el("div", "rkreveal"); f.innerHTML = bodySVG(tierMap(R), { sex: prefs.figure === "f" ? "f" : "m", label: "Your muscle map" }); b.appendChild(f);
+    const best = [...MUSCLE_KEYS].sort((a, c) => R.muscles[c].idx - R.muscles[a].idx).filter(m => R.muscles[m].idx > 0).slice(0, 3);
+    if (best.length) {
+      const top = best[0]; b.appendChild(el("p", "rkbig", "Your " + MUSCLE_NAMES[top].toLowerCase() + " is already " + stepName(R.muscles[top].idx) + "!"));
+      const l = el("div", "card rklist"); best.forEach(m => { const r = el("div", "rkli"); r.append(el("span", null, MUSCLE_NAMES[m]), rkBadge(R.muscles[m].idx)); l.appendChild(r); }); b.appendChild(l);
+    }
+    b.appendChild(el("p", "muted", "Level " + R.level + " · " + levelTitle(R.level) + ". Keep training to climb every muscle to Diamond."));
+    b.appendChild(btn("save", "See how it works", () => endRkFlow(true)));
+  }
+}
+// tier changes since you last looked (for the intro screen)
+function rkSnapSave(R) { if (uid) mem.set("rkSeen_" + uid, JSON.stringify(Object.fromEntries(MUSCLE_KEYS.map(m => [m, R.muscles[m].idx])))); }
+function rkNews() {
+  if (!prefs.rankIntro || !uid) return [];
+  let seen = null; try { seen = JSON.parse(mem.get("rkSeen_" + uid) || "null"); } catch (e) {}
+  const R = ranksNow(), out = [];
+  if (seen) MUSCLE_KEYS.forEach(m => {
+    const a = seen[m] || 0, b2 = R.muscles[m].idx;
+    if (b2 > a) out.push({ up: true, m, t: MUSCLE_NAMES[m] + " reached " + stepName(b2), c: TIER_C[tierOf(b2)] });
+    if (b2 < a) out.push({ up: false, m, t: MUSCLE_NAMES[m] + " dropped to " + stepName(b2), c: TIER_C[tierOf(b2)] });
+  });
+  MUSCLE_KEYS.forEach(m => { const x = R.muscles[m]; if (x.dropIn != null && x.dropIn <= 3) out.push({ warn: true, m, t: MUSCLE_NAMES[m] + " drops to " + stepName(x.idx - 1) + " in " + x.dropIn + " day" + (x.dropIn === 1 ? "" : "s"), c: "#f5b041" }); });
+  rkSnapSave(R);
+  return out.slice(0, 2);
+}
+// after saving a set: celebrate a new tier, toast a new step
+function rkAfterSet(before) {
+  if (!prefs.rankIntro || !before) return;
+  const R = ranksNow();
+  MUSCLE_KEYS.forEach(m => {
+    const a = before.muscles[m].idx, b2 = R.muscles[m].idx; if (b2 <= a) return;
+    if (tierOf(b2) > tierOf(a)) celebrate("tier", { m, idx: b2, tiers: tierMap(R) });
+    else toast("💪 " + MUSCLE_NAMES[m] + ": " + stepName(a) + " → " + stepName(b2));
+  });
+  rkSnapSave(R);
+}
+
 /* ---------- date picker (the app's own, so future days are greyed out on every phone) ---------- */
 let dpMonth = null;
 function openDatePick() {
@@ -2546,6 +2788,8 @@ function wire() {
   $("tourAgain").onclick = () => { $("menuClose").click(); setTimeout(startTour, 350); };
   $("introOn").onchange = () => { prefs = { ...prefs, intro: $("introOn").checked }; savePrefs(); renderSettings(); };
   document.querySelectorAll("[data-ip]").forEach(b => b.onclick = () => { prefs = { ...prefs, introPeriod: b.dataset.ip }; savePrefs(); renderSettings(); });
+  document.querySelectorAll("[data-fig]").forEach(b => b.onclick = () => { prefs = { ...prefs, figure: b.dataset.fig }; savePrefs(); renderSettings(); if (tab === "body") renderMe(); gSchedule(false); });
+  $("rkDim").onclick = closeRk; $("rkClose").onclick = closeRk;
   $("intro").onclick = e => { if (e.target.closest(".iweek")) { stopIntroTimer(); return; } closeIntro(); };
   let sx = null, sy = null;
   $("intro").addEventListener("touchstart", e => { const c = e.target.closest(".iweek"); sx = c ? e.touches[0].clientX : null; sy = c ? e.touches[0].clientY : null; }, { passive: true });

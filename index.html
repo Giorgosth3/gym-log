@@ -664,6 +664,47 @@ body.touring .chatbub{z-index:19}
 .dpgrid button.sel.done::after{background:var(--accent-ink)}
 .dpfoot{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .dpfoot .small{flex:1}
+/* Me tab: muscle ranks */
+.rkrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rkk{font:700 .72rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}.rkk.acc{color:var(--accent)}
+.rklevel{gap:8px}.rkname{font:700 1.8rem/1 var(--display);text-transform:uppercase}
+.rkq{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--chip);color:var(--ink);font:700 1rem var(--body);cursor:pointer;flex-shrink:0}
+.rkbar{height:9px;border-radius:5px;background:var(--chip);overflow:hidden}.rkbar i{display:block;height:100%;background:var(--accent);border-radius:5px}
+.rkmapcard{padding:12px 10px;gap:4px}.rkmapcard .rkrow{padding:0 6px}
+.rkmaps{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#121518;border-radius:12px;padding:8px 0 6px}
+.rkfig{display:flex;flex-direction:column;align-items:center;gap:2px}.rkfig svg{width:100%;height:auto;max-height:300px;cursor:pointer}.rkfig small{font:700 .62rem var(--body);letter-spacing:.14em;color:#8a95a1}
+.rkfig path[data-m]{cursor:pointer}
+.rkb{--tc:#888;display:inline-flex;align-items:center;gap:6px;font:700 .68rem var(--body);letter-spacing:.07em;border-radius:999px;padding:3px 9px;white-space:nowrap;color:var(--ink);background:color-mix(in srgb,var(--tc) 22%,transparent);border:1px solid var(--tc)}
+.rkb.big{font-size:.8rem;padding:5px 12px}
+
+.rkpips{display:inline-flex;gap:3px}.rkpips i{width:6px;height:6px;border-radius:50%;border:1px solid var(--tc)}.rkpips i.on{background:var(--tc)}
+.rklist{gap:0;padding:6px 14px}.rkli{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);font:500 .95rem var(--body);width:100%;text-align:left;cursor:pointer}
+.rkli:first-child{border-top:0}.rkright{display:flex;align-items:center;gap:8px}.rkmini{width:46px;height:5px;border-radius:3px;background:var(--chip);overflow:hidden}.rkmini i{display:block;height:100%}
+.rkwarn{flex-direction:row;align-items:center;gap:12px;padding:12px 14px;text-align:left;color:var(--ink);font:inherit;cursor:pointer;border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.rkwarn.fade{cursor:default;border-color:color-mix(in srgb,var(--warn) 50%,var(--line))}.rkwarn > span:nth-child(2){flex:1;display:flex;flex-direction:column;gap:2px}.rkwarn small{color:var(--muted)}
+.rkicon{font-size:1.3rem;flex-shrink:0}
+.linkbtn{align-self:flex-start;background:none;border:0;color:var(--accent);font:700 .85rem var(--body);cursor:pointer;padding:2px 0}
+.rkhelp{display:flex;gap:12px;align-items:flex-start}.rkhelp .rkicon{width:34px;height:34px;border-radius:10px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:1.1rem}
+.rkhelp b{display:block;margin-bottom:2px}.rkhelp p{margin:0;color:var(--muted);font-size:.9rem;line-height:1.4}
+.rkbadges{display:flex;flex-wrap:wrap;gap:6px}
+.rktable{display:flex;flex-direction:column}.rktable > div{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:.85rem;color:var(--muted)}.rktable b{color:var(--ink);font-weight:600;text-align:right}
+.rkone{background:#121518;border-radius:12px;display:flex;justify-content:center;padding:8px}.rkone svg{height:260px;width:auto}
+.rkstats{display:grid;grid-template-columns:1fr 1fr;gap:8px}.rkstats .card{padding:10px;gap:2px;align-items:center;text-align:center}.rkstats b{font:700 1.2rem var(--num)}.rkstats span{font-size:.75rem;color:var(--muted)}
+.rkwarntext{color:var(--warn)}
+.rkchips{display:flex;flex-wrap:wrap;gap:6px}.rkchips span{font:600 .8rem var(--body);background:var(--chip);border-radius:999px;padding:4px 10px}
+.rktag{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.rksel{font:500 1rem var(--body);padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+.rkintro{margin:0}
+.rkh{font:700 2.2rem/1 var(--display);text-transform:uppercase;margin:0}
+.rkpick{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rkopt{background:#181c21;border:2px solid var(--line);border-radius:18px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:6px;color:#eef1f4;font:inherit;cursor:pointer}
+.rkopt.on{border-color:var(--accent)}.rkopt svg{height:280px;width:auto;max-width:100%}
+.rkreveal{background:#121518;border-radius:16px;display:flex;justify-content:center;padding:10px}.rkreveal svg{height:330px;width:auto}
+.rkbig{font:700 1.5rem/1.1 var(--display);text-transform:uppercase;margin:0;text-align:center}
+.celemap{display:flex;justify-content:center;background:#121518;border-radius:12px;padding:6px 0}.celemap svg{height:150px;width:auto}
+.rknews{border-color:color-mix(in srgb,var(--tc) 60%,var(--line));background:color-mix(in srgb,var(--tc) 12%,var(--surface))}
+.gcrew{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;background:#121518;border-radius:12px;padding:8px 4px}
+.gcm{display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;color:#eef1f4}.gcm svg{height:130px;width:auto}.gcm b{font-size:.82rem}.gcm small{font-size:.65rem;color:#8a95a1}
 </style>
 </head>
 <body>
@@ -790,7 +831,8 @@ body.touring .chatbub{z-index:19}
   </section>
 
   <!-- BODY -->
-  <section class="pane" id="pane-body" aria-label="Body weight" hidden>
+  <section class="pane" id="pane-body" aria-label="Me: muscle ranks and body weight" hidden>
+    <div class="pane" id="meTop"></div>
     <div class="card">
       <label class="lbl" for="bw" id="bwLbl">Weigh-in</label>
       <div class="entry">
@@ -819,7 +861,7 @@ body.touring .chatbub{z-index:19}
     <button data-tab="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</button>
     <button data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><path d="M5 16l5-5 4 3 6-7"/></svg>Progress</button>
     <button data-tab="group"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.2a6.5 6.5 0 0 1 3 5.8"/></svg>Group</button>
-    <button data-tab="body"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 12l3.5-3.5"/><path d="M8 16h8"/></svg>Body</button>
+    <button data-tab="body"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>Me</button>
   </nav>
 
   <!-- Side menu: settings and tools -->
@@ -840,6 +882,15 @@ body.touring .chatbub{z-index:19}
   </div>
   <div class="dpick" id="dpick" hidden role="dialog" aria-modal="true" aria-label="Choose a date">
     <div class="dpdim" id="dpDim"></div><div class="dpbox" id="dpBox"></div>
+  </div>
+  <div class="addsheet" id="rkSheet" hidden role="dialog" aria-modal="true" aria-labelledby="rkTitle">
+    <div class="adddim" id="rkDim"></div>
+    <div class="addpanel"><div class="grab"></div>
+      <div class="addhead"><h2 id="rkTitle"></h2><button class="icon-btn" id="rkClose" aria-label="Close">✕</button></div>
+      <div class="addbody" id="rkBody"></div></div>
+  </div>
+  <div class="plan" id="rkFull" hidden role="dialog" aria-modal="true" aria-label="Your muscle map">
+    <div class="planpanel"><div class="planbody" id="rkFullBody"></div></div>
   </div>
   <div class="intro" id="intro" hidden role="dialog" aria-modal="true" aria-label="Your week so far. Tap to start">
     <div class="introbody" id="introBody"></div>
@@ -896,6 +947,7 @@ body.touring .chatbub{z-index:19}
           <div class="srow"><label for="celeOn">Celebrations <span class="small">(personal bests, workout done, weekly target, goal)</span></label><span class="switch"><input type="checkbox" id="celeOn"><span></span></span></div>
           <div class="srow"><label for="awakeOn">Keep screen on <span class="small">(while on Training)</span></label><span class="switch"><input type="checkbox" id="awakeOn"><span></span></span></div>
           <div class="srow"><label for="introOn">Intro when opening the app <span class="small">(weekly streak, workouts &amp; personal bests)</span></label><span class="switch"><input type="checkbox" id="introOn"><span></span></span></div>
+          <div class="srow col"><span id="figLbl">Muscle map figure</span><div class="seg" role="group" aria-labelledby="figLbl"><button data-fig="m">Male</button><button data-fig="f">Female</button></div></div>
           <div class="srow col" id="introPRow"><span id="ipLbl">Intro stats period</span><div class="seg" role="group" aria-labelledby="ipLbl"><button data-ip="week">Week</button><button data-ip="month">Month</button><button data-ip="year">Year</button><button data-ip="all">All time</button></div></div>
           <div class="srow"><span>Sessions per week</span><div class="mini"><button id="weekDown" aria-label="Fewer sessions">−</button><span id="weekLbl">4</span><button id="weekUp" aria-label="More sessions">+</button></div></div>
         </div>
