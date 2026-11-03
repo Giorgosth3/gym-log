@@ -638,7 +638,32 @@ body.touring .chatbub{z-index:19}
 .gsees{white-space:pre-line;margin:0;line-height:1.6}
 .gnews{width:100%;box-sizing:border-box;background:color-mix(in srgb,#e5484d 12%,var(--surface));border:1px solid color-mix(in srgb,#e5484d 50%,var(--line));border-radius:14px;padding:12px 14px;text-align:left;display:flex;gap:10px;align-items:center}
 .gnews b{display:block}.gnews small{color:var(--muted)}.gnicon{font-size:1.6rem}
+.gphd{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.glink{background:none;border:0;color:var(--accent);font:700 .85rem var(--body);cursor:pointer;padding:4px 0}
+.gpick{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}.gphd + .gpick{border-top:0}
+.gpick input{width:22px;height:22px;accent-color:var(--accent);flex-shrink:0;margin:0}.gpick.off{opacity:.55;cursor:default}
+.gpropose .save{position:sticky;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.gpropose .save:disabled{opacity:1;background:var(--chip);color:var(--muted)}
 @media (max-width:360px){.tabbar button{font-size:.72rem}}
+/* own date picker: future days greyed out on every phone */
+.dpick{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:16px}
+.dpdim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.dpbox{position:relative;width:100%;max-width:340px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:10px}
+.dpk{font:700 .75rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.dpbig{font:700 1.8rem/1 var(--display);text-transform:uppercase}
+.dpnav{display:flex;align-items:center;justify-content:space-between}.dpnav b{font-size:1rem}
+.dpnav div{display:flex;gap:6px}.dpnav button{width:38px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--chip);color:var(--ink);font:700 1.2rem/1 var(--body);cursor:pointer}
+.dpnav button:disabled{opacity:.3;cursor:default}
+.dpwk,.dpgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.dpwk span{font:600 .75rem var(--body);color:var(--muted);padding:4px 0}
+.dpgrid button{position:relative;aspect-ratio:1;border:0;border-radius:50%;background:transparent;color:var(--ink);font:500 .95rem var(--num);cursor:pointer;padding:0}
+.dpgrid button.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.dpgrid button.sel{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.dpgrid button:disabled{color:var(--muted);opacity:.32;cursor:not-allowed;text-decoration:line-through}
+.dpgrid button.done::after{content:"";position:absolute;left:50%;bottom:4px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--ok)}
+.dpgrid button.sel.done::after{background:var(--accent-ink)}
+.dpfoot{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dpfoot .small{flex:1}
 </style>
 </head>
 <body>
@@ -708,7 +733,7 @@ body.touring .chatbub{z-index:19}
           <button class="timerpill" id="timerPill" hidden aria-haspopup="true" aria-expanded="false" aria-controls="timerMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M10 2h4"/></svg><span id="timerTime">1:30</span></button>
           <div class="timermenu" id="timerMenu" hidden><button class="use" id="restMore">+30s</button><button class="use" id="restSkip">Skip</button></div>
         </div>
-        <label class="datewrap"><span id="dateLbl">Today</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><input type="date" id="date" aria-label="Date"></label>
+        <button type="button" class="datewrap" id="dateBtn" aria-label="Choose date" aria-haspopup="dialog"><span id="dateLbl">Today</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><input type="hidden" id="date"></button>
       </div>
     </header>
     <div class="days" role="group" aria-label="Workout" id="dayBtns"></div>
@@ -812,6 +837,9 @@ body.touring .chatbub{z-index:19}
   <div class="ask" id="ask" hidden role="alertdialog" aria-modal="true" aria-labelledby="askTitle">
     <div class="askbox"><b id="askTitle"></b><p id="askText"></p><div class="askcard" id="askCard" hidden></div>
       <button class="save" id="askOk">OK</button><button class="use" id="askNo">Cancel</button></div>
+  </div>
+  <div class="dpick" id="dpick" hidden role="dialog" aria-modal="true" aria-label="Choose a date">
+    <div class="dpdim" id="dpDim"></div><div class="dpbox" id="dpBox"></div>
   </div>
   <div class="intro" id="intro" hidden role="dialog" aria-modal="true" aria-label="Your week so far. Tap to start">
     <div class="introbody" id="introBody"></div>

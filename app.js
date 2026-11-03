@@ -1240,6 +1240,7 @@ const layerClosers = {
   tour: () => endTour(),
   plan: () => { if (planUI && planUI.mode === "change") { planUI = null; $("plan").hidden = true; document.body.classList.remove("menu-open", "planning"); } },
   add: () => reallyCloseAdd(),
+  date: () => { $("dpick").hidden = true; },
   grp: () => { if (typeof gUI !== "undefined" && !["group", "home"].includes(gUI.view)) { gUI.view = "group"; gOpenVote = null; gProposing = false; if (tab === "group") renderGroup(); } }
 };
 let ignorePop = 0;
@@ -1267,7 +1268,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Workout days (add, rename, reorder, remove): Settings → Workout days & exercises.
 - Settings → Training: units kg/lbs, rest timer on/off and length, weekly session target, keep screen on, celebrations on/off. Settings → Colours: themes, including custom ones. Settings → Your data: Export to Excel, import sets from Excel. Settings → Account: sign out.
 - Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
-- Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose an exercise; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
+- Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
 - Progress tab: Exercises view (estimated 1-rep max chart, personal best, plateau alerts) and Consistency view (calendar, weekly sessions).
 - Body tab: log body weight, 7-day average, weekly rate, goal weight.
 - Wrong day: remove the set, change the date at the top right, save it again.
@@ -1908,7 +1909,7 @@ const G_MAX = 12, G_PER = 3, G_VOTE_DAYS = 7, G_JUMP = 1.3, G_EX_MAX = 40;
 const G_COLORS = ["#ff6a33", "#5bc0eb", "#3fc27a", "#c792ea", "#f5c542", "#e86a92", "#4dd0c4", "#ffa94d", "#8fa1ff", "#b5e550", "#ff8a80", "#a1887f"];
 let groups = {};                                   // gid -> { d: group doc, b: best sets by member uid }
 let gUI = { view: "group", gid: mem.get("gid") || null, ex: null };
-let gLoading = false, gAgain = false, gSyncTimer = null, gFromSet = 0, gOpenVote = null, gProposing = false;
+let gLoading = false, gAgain = false, gSyncTimer = null, gFromSet = 0, gOpenVote = null, gProposing = false, gPick = new Set();
 const myGroups = () => (Array.isArray(prefs.groups) ? prefs.groups : []).filter(x => typeof x === "string");
 const newId = n => Array.from({ length: n }, () => "abcdefghijkmnpqrstuvwxyz23456789"[Math.floor(Math.random() * 32)]).join("");
 const gMemberName = (g, u) => ((g.members || {})[u] || {}).name || "A member";
@@ -2273,6 +2274,7 @@ function gVotesView(box, G) {
   const g = G.d, n = (g.memberIds || []).length;
   box.appendChild(gBack(g.name));
   box.append(el("h2", "gh2", "Exercise votes"), el("p", "muted gsub", "An exercise joins the rankings when every member votes yes. Votes close after " + G_VOTE_DAYS + " days."));
+  if (gProposing) setTimeout(() => { const pc = document.querySelector(".gpropose"); if (pc && !gPick.size) window.scrollTo(0, pc.getBoundingClientRect().top + scrollY - 84); }, 0);
   if (!knownNames().length) box.appendChild(el("div", "empty", "Add exercises to your plan first (Settings → Workout days & exercises), then you can vote."));
   const yesCount = x => (g.memberIds || []).filter(u => (x.votes || {})[u] === "yes").length;
   const todo = gTodo(g);
@@ -2312,27 +2314,49 @@ function gVotesView(box, G) {
   const active = Object.values(g.ex || {}).filter(x => x.status === "pending" || x.status === "ranked");
   const used = active.map(x => (x.links || {})[uid]).filter(Boolean);
   if (!knownNames().length) return;
-  if (!gProposing) { box.appendChild(gBtn("save", "+ Propose an exercise", () => { gProposing = true; renderGroup(); })); return; }
-  const c = el("div", "card"); c.append(el("b", null, "Propose an exercise"), el("p", "muted", "Pick one of yours. Everyone else links their own version when they vote, so names don't have to match."));
-  const sel = gPicker(null, used); if (!sel.options.length) { c.appendChild(el("p", "small", "All your exercises are already ranked or in a vote.")); box.appendChild(c); return; }
-  c.appendChild(sel);
-  const msg = el("p", "small gmsg"); c.appendChild(msg);
-  const r = el("div", "btns");
-  const go = gBtn("use primary", "Propose", async () => {
-    const name = sel.value, dup = active.find(x => squash(x.name) === squash(name));
-    if (dup) { msg.textContent = dup.status === "ranked" ? dup.name + " is already ranked. Link yours to it above." : dup.name + " is already in a vote. Vote on it above."; return; }
-    if (active.length >= G_EX_MAX) { msg.textContent = "This group has the maximum of " + G_EX_MAX + " exercises."; return; }
-    await busy(go, async () => {
-      try {
-        const id = newId(10);
-        const d = await be.mutateGroup(gUI.gid, d => { d.ex = d.ex || {}; d.ex[id] = { name, by: uid, at: Date.now(), status: "pending", votes: { [uid]: "yes" }, links: { [uid]: name } }; resolveVotes(d, Date.now()); return d; });
-        if (d) groups[gUI.gid].d = d; gProposing = false;
-        toast(groups[gUI.gid].d.ex[id].status === "ranked" ? name + " is ranked." : "Proposed " + name + ". Everyone has " + G_VOTE_DAYS + " days to vote.");
-        renderGroup(); loadGroups();
-      } catch (e) { msg.textContent = gErr(e); }
+  if (!gProposing) { box.appendChild(gBtn("save", "+ Propose exercises", () => { gProposing = true; gPick = new Set(); renderGroup(); })); return; }
+  // tick as many as you like, grouped by workout day
+  const c = el("div", "card gpropose");
+  c.append(el("b", null, "Propose exercises"), el("p", "muted", "Tick as many of yours as you like. Everyone else links their own version when they vote, so names don't have to match."));
+  const taken = n => active.find(x => squash(x.name) === squash(n));
+  const groupsOf = []; const seenN = new Set();
+  days.forEach(d => { const l = (lists[d] || []).filter(n => !seenN.has(n)); l.forEach(n => seenN.add(n)); if (l.length) groupsOf.push([d, l]); });
+  const rest = knownNames().filter(n => !seenN.has(n)); if (rest.length) groupsOf.push(["Other exercises", rest]);
+  const free = n => !used.includes(n) && !taken(n);
+  if (!groupsOf.some(([, l]) => l.some(free))) { c.appendChild(el("p", "small", "All your exercises are already ranked or in a vote.")); c.appendChild(gBtn("use", "Close", () => { gProposing = false; renderGroup(); })); box.appendChild(c); return; }
+  const go = gBtn("save", "", () => {});
+  const sync = () => { go.textContent = gPick.size ? "Propose " + gPick.size + " exercise" + (gPick.size === 1 ? "" : "s") : "Tick exercises to propose"; go.disabled = !gPick.size; };
+  groupsOf.forEach(([d, l]) => {
+    const hd = el("div", "gphd"); hd.appendChild(el("span", "gk", d));
+    const can = l.filter(free);
+    if (can.length > 1) { const all = gBtn("glink", can.every(n => gPick.has(n)) ? "Clear" : "Select all", () => { const on = can.every(n => gPick.has(n)); can.forEach(n => on ? gPick.delete(n) : gPick.add(n)); renderGroup(); }); hd.appendChild(all); }
+    c.appendChild(hd);
+    l.forEach(n => {
+      if (used.includes(n)) return;                       // already linked by me: nothing to propose
+      const t = taken(n), row = el("label", "gpick" + (t ? " off" : ""));
+      const cb = el("input"); cb.type = "checkbox"; cb.checked = gPick.has(n); cb.disabled = !!t;
+      cb.onchange = () => { cb.checked ? gPick.add(n) : gPick.delete(n); sync(); };
+      const tx = el("span", "gxn"); tx.appendChild(el("b", null, n));
+      if (t) tx.appendChild(el("small", null, t.status === "ranked" ? "Already ranked: link yours above" : "Already in a vote: vote above"));
+      row.append(cb, tx); c.appendChild(row);
     });
   });
-  r.append(gBtn("use", "Cancel", () => { gProposing = false; renderGroup(); }), go); c.appendChild(r);
+  const msg = el("p", "small gmsg"); c.appendChild(msg);
+  go.onclick = async () => {
+    const names = [...gPick].filter(free); if (!names.length) return;
+    if (active.length + names.length > G_EX_MAX) { msg.textContent = "A group can have up to " + G_EX_MAX + " exercises. Untick " + (active.length + names.length - G_EX_MAX) + "."; return; }
+    await busy(go, async () => {
+      try {
+        const now = Date.now(), ids = names.map(() => newId(10));
+        const d = await be.mutateGroup(gUI.gid, d => { d.ex = d.ex || {}; names.forEach((name, i) => { d.ex[ids[i]] = { name, by: uid, at: now, status: "pending", votes: { [uid]: "yes" }, links: { [uid]: name } }; }); resolveVotes(d, now); return d; });
+        if (d) groups[gUI.gid].d = d; gProposing = false; gPick = new Set();
+        const rk = ids.filter(id => groups[gUI.gid].d.ex[id].status === "ranked").length;
+        toast(rk ? names.length + " exercise" + (names.length === 1 ? "" : "s") + " ranked." : "Proposed " + names.length + " exercise" + (names.length === 1 ? "" : "s") + ". Everyone has " + G_VOTE_DAYS + " days to vote.");
+        renderGroup(); loadGroups();
+      } catch (e) { msg.textContent = gErr(e); sync(); }
+    });
+  };
+  sync(); c.append(go, gBtn("use", "Cancel", () => { gProposing = false; gPick = new Set(); renderGroup(); }));
   box.appendChild(c);
 }
 async function gMutate(fn, okMsg) {
@@ -2417,12 +2441,54 @@ async function gLeave(g) {
   gGo("group", { gid: myGroups()[0] || null }); toast("You left " + g.name + ".");
 }
 
+/* ---------- date picker (the app's own, so future days are greyed out on every phone) ---------- */
+let dpMonth = null;
+function openDatePick() {
+  const [y, m] = ($("date").value || todayISO()).split("-").map(Number); dpMonth = new Date(y, m - 1, 1);
+  renderDatePick(); $("dpick").hidden = false; pushLayer("date");
+  setTimeout(() => { const b = document.querySelector(".dpgrid .sel") || document.querySelector(".dpgrid button:not(:disabled)"); if (b) b.focus(); }, 30);
+}
+function closeDatePick() { if ($("dpick").hidden) return; popLayer("date"); $("dpick").hidden = true; }
+function pickDate(iso) {
+  if (iso > todayISO()) return;
+  $("date").value = iso; closeDatePick(); $("date").onchange();
+}
+function renderDatePick() {
+  const box = $("dpBox"), t = todayISO(), sel = $("date").value || t, now = new Date(); box.innerHTML = "";
+  box.append(el("span", "dpk", "Select date"), el("div", "dpbig", sel === t ? "Today" : longDate(sel)));
+  const nav = el("div", "dpnav"), arrows = el("div");
+  nav.appendChild(el("b", null, ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][dpMonth.getMonth()] + " " + dpMonth.getFullYear()));
+  const prev = el("button", null, "‹"), next = el("button", null, "›"); prev.type = next.type = "button";
+  prev.setAttribute("aria-label", "Previous month"); next.setAttribute("aria-label", "Next month");
+  next.disabled = dpMonth.getFullYear() > now.getFullYear() || (dpMonth.getFullYear() === now.getFullYear() && dpMonth.getMonth() >= now.getMonth());
+  prev.onclick = () => { dpMonth = new Date(dpMonth.getFullYear(), dpMonth.getMonth() - 1, 1); renderDatePick(); };
+  next.onclick = () => { if (!next.disabled) { dpMonth = new Date(dpMonth.getFullYear(), dpMonth.getMonth() + 1, 1); renderDatePick(); } };
+  arrows.append(prev, next); nav.appendChild(arrows); box.appendChild(nav);
+  const wk = el("div", "dpwk"); ["M", "T", "W", "T", "F", "S", "S"].forEach(d => wk.appendChild(el("span", null, d))); box.appendChild(wk);
+  const grid = el("div", "dpgrid"), trained = trainedDates();
+  for (let i = 0; i < (dpMonth.getDay() + 6) % 7; i++) grid.appendChild(el("span"));
+  const last = new Date(dpMonth.getFullYear(), dpMonth.getMonth() + 1, 0).getDate();
+  for (let d = 1; d <= last; d++) {
+    const iso = isoOf(new Date(dpMonth.getFullYear(), dpMonth.getMonth(), d)), b = el("button", null, String(d)); b.type = "button";
+    if (iso > t) { b.disabled = true; b.setAttribute("aria-label", longDate(iso) + ", future day, can't be picked"); }
+    else b.setAttribute("aria-label", longDate(iso) + (trained.has(iso) ? ", trained" : ""));
+    if (iso === t) b.classList.add("today"); if (iso === sel) b.classList.add("sel"); if (trained.has(iso)) b.classList.add("done");
+    b.onclick = () => pickDate(iso); grid.appendChild(b);
+  }
+  box.appendChild(grid);
+  const foot = el("div", "dpfoot"); foot.appendChild(el("span", "small", "● trained · future days can't be picked"));
+  const td = el("button", "use", "Today"), cn = el("button", "use", "Cancel"); td.type = cn.type = "button";
+  td.onclick = () => pickDate(t); cn.onclick = closeDatePick; foot.append(td, cn); box.appendChild(foot);
+}
+
 /* ---------- wiring ---------- */
 function wire() {
   $("date").value = todayISO(); $("date").max = todayISO();
   // no logging ahead: the calendar stops at today (and today moves on if the app stays open past midnight)
   const keepMax = () => { $("date").max = todayISO(); if ($("date").value > todayISO()) { $("date").value = todayISO(); renderDateLbl(); renderUnits(); renderPane(); } };
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) keepMax(); }); $("date").addEventListener("focus", keepMax);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) keepMax(); });
+  $("dateBtn").onclick = () => { keepMax(); openDatePick(); }; $("dpDim").onclick = closeDatePick;
+  $("dpick").onkeydown = e => { if (e.key === "Escape") { e.stopPropagation(); closeDatePick(); } };
   document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
   $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO();
     if ($("date").value > todayISO()) { $("date").value = todayISO(); toast("You can't log a future day. Showing today.", true); } renderDateLbl(); renderUnits(); renderPane(); };
