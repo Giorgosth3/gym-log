@@ -204,7 +204,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 #main{padding-bottom:calc(168px + env(safe-area-inset-bottom,0px))}
 .pane{display:flex;flex-direction:column;gap:14px}
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
-  display:grid;grid-template-columns:repeat(4,1fr);
+  display:grid;grid-template-columns:repeat(5,1fr);
   padding:6px max(8px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
 .tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;background:transparent;border:0;color:var(--muted);
   font:600 .8rem var(--body);padding:6px 2px;cursor:pointer;border-radius:10px}
@@ -596,6 +596,49 @@ body.touring .chatbub{z-index:19}
 
 .inapplink{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inapplink code{font:500 .85rem var(--num);background:var(--chip);padding:6px 8px;border-radius:8px;overflow-wrap:anywhere;flex:1;min-width:0}
+/* friends groups */
+.gh2{font:700 1.7rem/1.05 var(--display);text-transform:uppercase;letter-spacing:.02em;margin:0}
+.gsub{margin:-6px 0 0}
+.gk{font:700 .75rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.gback{align-self:flex-start;background:none;border:0;padding:4px 0;color:var(--muted);font:700 .8rem var(--body);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+.gempty{align-items:center;text-align:center;padding:26px 18px}.gempty p{margin:0}.gemoji{font-size:3rem;line-height:1}
+.gnote{margin:0;color:var(--muted)}
+.gmsg{margin:0;color:var(--danger)}.gmsg:empty{display:none}
+#grp input[type=text],.gsel{font:500 1.05rem var(--body);padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;box-sizing:border-box}
+.gcodein{font-family:var(--num)!important;letter-spacing:.2em;text-transform:uppercase}
+.gswitch{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.gswitch::-webkit-scrollbar{display:none}
+.gswitch button{flex-shrink:0;font:600 .85rem var(--body);padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer;white-space:nowrap}
+.gswitch button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}.gswitch .gadd{background:transparent;color:var(--muted)}
+.ghead{display:flex;justify-content:space-between;align-items:center;gap:10px}.ghead > div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.gicon{width:44px;height:44px;flex-shrink:0;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:1.3rem;cursor:pointer}
+.ginvite p{margin:0}.gcode{font:700 2rem var(--num);letter-spacing:.18em;text-align:center;padding:8px;border-radius:10px;background:var(--chip)}
+.ginvite .btns,#grp .card > .btns{display:flex;gap:8px;flex-wrap:wrap}#grp .btns .use{padding:9px 12px}
+.gvotebar{flex-direction:row;align-items:center;gap:12px;padding:12px 16px;border-color:var(--accent);color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.gvt{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}.gvt small{color:var(--muted)}.gbig{font-size:1.5rem}
+.gpodium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:end;text-align:center}
+.gpodium div{border-radius:12px 12px 0 0;background:var(--chip);padding:8px 4px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.gpodium div.p1{background:color-mix(in srgb,#f5c542 22%,var(--chip));border:1px solid #f5c542}.gpodium div.pnone{background:transparent}
+.gpodium b{font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gpodium span{font:700 1.2rem var(--num)}
+.glist{gap:0}.glist .gk{margin-bottom:4px}
+.gx{display:flex;align-items:center;gap:10px;padding:11px 0;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);text-align:left;width:100%;font:inherit;cursor:pointer}
+.gx.gstatic{cursor:default}.glist .gx:nth-child(2),.card > .gk + .gx{border-top:0}
+.gxn{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}.gxn b{font-weight:600}.gxn small{color:var(--muted);font-size:.8rem}
+.gpos{font:700 .8rem var(--num);background:var(--chip);border-radius:999px;padding:3px 9px;white-space:nowrap;flex-shrink:0}.gpos.one{background:#f5c542;color:#111}
+.glb{gap:0}.grow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.glb .grow:first-child,.glist .gk + .grow{border-top:0}
+.grow.me{background:color-mix(in srgb,var(--accent) 10%,transparent);border-radius:10px;padding-left:8px;padding-right:8px;margin:0 -8px}
+.grow .btns{display:flex;gap:6px;flex-shrink:0}
+.gmedal{font-size:1.25rem;width:28px;text-align:center;font-family:var(--num);flex-shrink:0}
+.gav{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 .9rem var(--body);color:#111;flex-shrink:0}
+.gflag{font:600 .7rem var(--body);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);border-radius:6px;padding:1px 6px;margin-left:6px;white-space:nowrap}
+.gval{font:700 1.05rem var(--num);text-align:right;white-space:nowrap}.gval small{display:block;font:500 .72rem var(--body);color:var(--muted)}
+.gtarget{flex-direction:row;align-items:center;gap:12px}.gtarget > div{display:flex;flex-direction:column;gap:2px}.gtarget small{color:var(--muted)}
+.gvote{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid var(--line)}.gk + .gvote{border-top:0;padding-top:4px}
+.gvote .btns{display:flex;gap:8px}.gvote .btns .use{flex:1;padding:11px}
+.gdanger{color:var(--danger)!important;border-color:color-mix(in srgb,var(--danger) 45%,var(--line))!important}
+.gsees{white-space:pre-line;margin:0;line-height:1.6}
+.gnews{width:100%;box-sizing:border-box;background:color-mix(in srgb,#e5484d 12%,var(--surface));border:1px solid color-mix(in srgb,#e5484d 50%,var(--line));border-radius:14px;padding:12px 14px;text-align:left;display:flex;gap:10px;align-items:center}
+.gnews b{display:block}.gnews small{color:var(--muted)}.gnicon{font-size:1.6rem}
+@media (max-width:360px){.tabbar button{font-size:.72rem}}
 </style>
 </head>
 <body>
@@ -716,6 +759,11 @@ body.touring .chatbub{z-index:19}
     <div class="pane" id="pvCons" hidden></div>
   </section>
 
+  <!-- GROUP -->
+  <section class="pane" id="pane-group" aria-label="Group" hidden>
+    <div class="pane" id="grp"></div>
+  </section>
+
   <!-- BODY -->
   <section class="pane" id="pane-body" aria-label="Body weight" hidden>
     <div class="card">
@@ -745,6 +793,7 @@ body.touring .chatbub{z-index:19}
     <button data-tab="training"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Training</button>
     <button data-tab="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</button>
     <button data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><path d="M5 16l5-5 4 3 6-7"/></svg>Progress</button>
+    <button data-tab="group"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.2a6.5 6.5 0 0 1 3 5.8"/></svg>Group</button>
     <button data-tab="body"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 12l3.5-3.5"/><path d="M8 16h8"/></svg>Body</button>
   </nav>
 

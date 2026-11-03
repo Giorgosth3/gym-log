@@ -56,11 +56,11 @@ const offlineNote = () => navigator.onLine ? "" : " · syncs when you're back on
 
 /* ---------- tabs + day buttons ---------- */
 function renderTabs() {
-  ["training", "history", "progress", "body"].forEach(t => { $("pane-" + t).hidden = t !== tab; });
+  ["training", "history", "progress", "group", "body"].forEach(t => { $("pane-" + t).hidden = t !== tab; });
   document.querySelectorAll("[data-tab]").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   $("dayBtns").hidden = !(tab === "training" || tab === "history");
 }
-function setTab(t) { tab = t; mem.set("tab", t); if (t !== "history") adding = null; renaming = null; armed = null; selSet = null; renderTabs(); renderPane(); window.scrollTo(0, 0); syncWake(); }
+function setTab(t) { if (tab === "group" && t !== "group" && !["group", "home"].includes(gUI.view)) { popLayer("grp"); gUI.view = "group"; } if (t === "group" && tab !== "group") loadGroups(); tab = t; mem.set("tab", t); if (t !== "history") adding = null; renaming = null; armed = null; selSet = null; renderTabs(); renderPane(); window.scrollTo(0, 0); syncWake(); }
 function renderDayBtns() {
   if (!days.includes(day)) day = days[0] || "";
   const box = $("dayBtns"); box.innerHTML = "";
@@ -75,6 +75,7 @@ function renderPane() {
   if (tab === "history") renderHistory();
   if (tab === "progress") renderProgress();
   if (tab === "body") renderBody();
+  if (tab === "group") renderGroup();
 }
 function renderAll() { renderDayBtns(); renderSelect(); renderUnits(); renderSettings(); if (!renaming && !adding) renderPane(); else renderHint(); }
 
@@ -207,6 +208,7 @@ function saveSet() {
   if (prefs.restOn) startRest(prefs.restSec);
   // big moments only
   if (isPB) celebrate("pb", { ex, w, r, prev: prevBest });
+  gSchedule(true);
   checkDayDone(date);
   if (firstOfDay) checkWeek(date);
 }
@@ -244,6 +246,7 @@ const CELE = {
   pb: { c: "#f5c542", icon: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>' },
   day: { c: "#3fc27a", icon: '<path d="M20 6L9 17l-5-5"/>' },
   week: { c: "#ff6a33", icon: '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/>' },
+  crown: { c: "#f5c542", icon: '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z"/>' },
   goal: { c: "#5bc0eb", icon: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>' }
 };
 function nextCele() {
@@ -266,6 +269,9 @@ function nextCele() {
     const dots = el("div", "cdots"); dots.setAttribute("aria-label", "Days trained this week");
     data.dots.forEach((on, i) => { const d = el("i", on ? "" : "off"); d.title = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]; dots.appendChild(d); });
     card.appendChild(dots); add("small", "Mon – Sun");
+  } else if (type === "crown") {
+    add("ckick", "#1 in " + data.group); add("cbig", fmtW(data.w) + " × " + data.r, "celeTitle"); add("csub", data.ex);
+    add("cwas", "You took first place from " + data.from + ".");
   } else if (type === "goal") {
     add("ckick", "Goal reached"); add("cbig", fmtW(data.goal), "celeTitle"); add("csub", "You hit your goal weight");
     const weeks = Math.max(1, Math.round((Date.now() - new Date(data.since).getTime()) / (7 * 86400e3)));
@@ -831,6 +837,7 @@ function revealMain() {
   planPending = !days.length && !/[?&]noplan\b/.test(location.search);
   if (!days.length && /[?&]mock\b/.test(location.search) && /[?&]noplan\b/.test(location.search)) { const p = PLANS[0]; days = Object.keys(p.days); lists = clone(p.days); saveLists(); } // automated tests only
   if (!prefs.tourDone) { if (allSets().length) { prefs = { ...prefs, tourDone: true }; savePrefs(); } else if (!/[?&]notour\b/.test(location.search)) tourPending = true; }
+  setTimeout(loadGroups, 50);
   showIntro(true); // covers the screen first (if switched on)…
   show("main"); renderTabs(); renderAll(); // …then the main screen is built underneath it
   if ($("intro").hidden) { if (planPending) setTimeout(() => openPlan("first"), 200); else if (tourPending) setTimeout(startTour, 300); }
@@ -1142,6 +1149,7 @@ const TOUR = [
   { tab: "history", sel: "#history .ex-card", t: "History", p: "Every exercise with all your past sessions. Open one to see the sets, rename it or remove it." },
   { tab: "progress", pview: "ex", sel: "#pvEx", t: "Progress: exercises", p: "Pick an exercise to see your strength trend, your personal best and a warning if you've stopped improving." },
   { tab: "progress", pview: "cons", sel: "#pvCons", t: "Progress: consistency", p: "A calendar of the days you trained and how many workouts you did each week against your target." },
+  { tab: "group", sel: "#grp", t: "Group", p: "Make a private group with friends from your gym, vote in the exercises you all do, and see who lifts the heaviest. Your Training sets count automatically." },
   { tab: "body", sel: "#pane-body .card", t: "Body weight", p: "Log your weight and set a goal. The 7-day average smooths out daily ups and downs. Hit your goal and you'll get a celebration." },
   { tab: "training", sel: "#chatBub", round: true, t: "Ask the coach", p: "Tap HELP to ask how to use the app or how to do an exercise. Press and hold it to move it out of the way." },
   { tab: "training", sel: "#menuOpen", t: "Settings", p: "Your days & exercises, change plan, plan codes to share, units, rest timer, weekly target, colours, account and Excel export. This tour is in there too." },
@@ -1228,7 +1236,8 @@ document.addEventListener("visibilitychange", () => {
 const layerClosers = {
   tour: () => endTour(),
   plan: () => { if (planUI && planUI.mode === "change") { planUI = null; $("plan").hidden = true; document.body.classList.remove("menu-open", "planning"); } },
-  add: () => reallyCloseAdd()
+  add: () => reallyCloseAdd(),
+  grp: () => { if (typeof gUI !== "undefined" && !["group", "home"].includes(gUI.view)) { gUI.view = "group"; gOpenVote = null; gProposing = false; if (tab === "group") renderGroup(); } }
 };
 let ignorePop = 0;
 function pushLayer(name) { try { history.pushState({ layer: name }, ""); } catch (e) {} }
@@ -1245,7 +1254,7 @@ const CHAT_KEEP = 12;            // earlier messages sent along for context
 const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; never invent buttons that are not listed here):
 - Top bar: menu button (☰) opens Settings; the date button (top right) picks the day you're logging; a chat button opens this coach. After saving a set, a rest timer appears at the top: tap it for +30s or Skip.
 - Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders).
-- Bottom tabs: Training, History, Progress, Body.
+- Bottom tabs: Training, History, Progress, Group, Body.
 - Training tab: exercise buttons for the chosen day. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
 - Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
 - Add an exercise: "+ Add exercise" at the end of the exercise buttons (or in Settings → Workout days & exercises, open a day). It searches the built-in list of 130+ exercises grouped by muscle with equipment versions, shows the user's own exercises first with their last result, and lets them type any name as their own. It asks "Did you mean…?" if a typed name is almost the same as an existing one, so history stays together.
@@ -1255,6 +1264,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Workout days (add, rename, reorder, remove): Settings → Workout days & exercises.
 - Settings → Training: units kg/lbs, rest timer on/off and length, weekly session target, keep screen on, celebrations on/off. Settings → Colours: themes, including custom ones. Settings → Your data: Export to Excel, import sets from Excel. Settings → Account: sign out.
 - Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
+- Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose an exercise; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
 - Progress tab: Exercises view (estimated 1-rep max chart, personal best, plateau alerts) and Consistency view (calendar, weekly sessions).
 - Body tab: log body weight, 7-day average, weekly rate, goal weight.
 - Wrong day: remove the set, change the date at the top right, save it again.
@@ -1750,7 +1760,7 @@ async function renameExercise(d, oldName, newName) {
   days.forEach(k => { if (mem.get("ex_" + k) === oldName) mem.set("ex_" + k, newName); if (mem.get("pEx_" + k) === oldName) mem.set("pEx_" + k, newName); });
   if (expanded.has(oldName)) { expanded.delete(oldName); expanded.add(newName); }
   renaming = null; renderSelect(); renderHistory(); renderSettings();
-  saveLists(); changed.forEach(s => writeSession(s.date, s));
+  saveLists(); changed.forEach(s => writeSession(s.date, s)); gRename(oldName, newName);
   toast((exists ? "Merged into " : "Renamed to ") + newName + (changed.length ? " across " + changed.length + " session" + (changed.length > 1 ? "s" : "") : "") + "." + offlineNote());
 }
 
@@ -1886,8 +1896,522 @@ function applyDocs(docs) {
   $("status").textContent = n + " session" + (n === 1 ? "" : "s") + (b ? " and " + b + " weigh-in" + (b === 1 ? "" : "s") : "") + " saved · private to you";
   $("sumData").textContent = n + " session" + (n === 1 ? "" : "s");
   if (me) guestNag();
-  if (introPending) revealMain();
+  if (introPending) revealMain(); else gSchedule(false);
   if (tour) requestAnimationFrame(placeTour);
+}
+
+/* ---------- friends groups: private groups ranked by raw weight on exercises everyone voted in ---------- */
+const G_MAX = 12, G_PER = 3, G_VOTE_DAYS = 7, G_JUMP = 1.3, G_EX_MAX = 40;
+const G_COLORS = ["#ff6a33", "#5bc0eb", "#3fc27a", "#c792ea", "#f5c542", "#e86a92", "#4dd0c4", "#ffa94d", "#8fa1ff", "#b5e550", "#ff8a80", "#a1887f"];
+let groups = {};                                   // gid -> { d: group doc, b: best sets by member uid }
+let gUI = { view: "group", gid: mem.get("gid") || null, ex: null };
+let gLoading = false, gAgain = false, gSyncTimer = null, gFromSet = 0, gOpenVote = null, gProposing = false;
+const myGroups = () => (Array.isArray(prefs.groups) ? prefs.groups : []).filter(x => typeof x === "string");
+const newId = n => Array.from({ length: n }, () => "abcdefghijkmnpqrstuvwxyz23456789"[Math.floor(Math.random() * 32)]).join("");
+const gMemberName = (g, u) => ((g.members || {})[u] || {}).name || "A member";
+const gWho = (g, u) => u === uid ? "You" : gMemberName(g, u);
+const gIsLeader = g => g.leader === uid;
+const gOrder = g => [...(g.memberIds || [])].sort((a, b) => (((g.members || {})[a] || {}).joined || 0) - (((g.members || {})[b] || {}).joined || 0));
+const gColor = (g, u) => G_COLORS[Math.max(0, gOrder(g).indexOf(u)) % G_COLORS.length];
+const ahead = (a, b) => a.w > b.w || (a.w === b.w && (a.r > b.r || (a.r === b.r && a.d < b.d)));   // is set a ranked above set b
+const gRanked = g => Object.entries(g.ex || {}).filter(([, x]) => x.status === "ranked").sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+const gDateLbl = iso => iso ? shortDate(iso) : "";
+
+// my best set ever on one of my exercises, plus my heaviest weight before that day (for the jump warning)
+function bestOf(name) {
+  const all = working(allSets().filter(x => x.ex === name)); if (!all.length) return null;
+  const b = all.reduce((a, x) => (x.w > a.w || (x.w === a.w && (x.r > a.r || (x.r === a.r && x.date < a.date)))) ? x : a);
+  const before = all.filter(x => x.date < b.date);
+  return { w: b.w, r: b.r, d: b.date, prev: before.length ? Math.max(...before.map(x => x.w)) : null };
+}
+function myBestsFor(g) {
+  const out = {};
+  Object.entries(g.ex || {}).forEach(([id, x]) => {
+    const n = (x.links || {})[uid]; if (!n || (x.status !== "ranked" && x.status !== "pending")) return;
+    const b = bestOf(n); if (b) out[id] = b;
+  });
+  return out;
+}
+function gBoard(gid, exId) {
+  const G = groups[gid]; if (!G) return [];
+  const g = G.d, x = (g.ex || {})[exId]; if (!x) return [];
+  const rows = [];
+  (g.memberIds || []).forEach(u => { if (!(x.links || {})[u]) return; const b = ((G.b || {})[u] || {})[exId]; if (b && typeof b.w === "number") rows.push({ u, ...b }); });
+  return rows.sort((a, b) => ahead(a, b) ? -1 : ahead(b, a) ? 1 : 0);
+}
+// close votes: everyone yes = ranked, anyone no = dropped, not everyone voted in 7 days = dropped
+function resolveVotes(g, now) {
+  let changed = false; const ids = g.memberIds || [];
+  Object.values(g.ex || {}).forEach(x => {
+    if (x.status !== "pending") return; const v = x.votes || {};
+    const no = ids.find(u => v[u] === "no");
+    if (no) { Object.assign(x, { status: "dropped", reason: gMemberName(g, no) + " doesn't do this exercise.", done: now }); changed = true; return; }
+    if (ids.length && ids.every(u => v[u] === "yes")) { Object.assign(x, { status: "ranked", done: now }); changed = true; return; }
+    if (now - (x.at || now) > G_VOTE_DAYS * 864e5) {
+      const w = ids.filter(u => v[u] !== "yes").map(u => gMemberName(g, u));
+      Object.assign(x, { status: "dropped", reason: "Not everyone voted within " + G_VOTE_DAYS + " days (no vote from " + w.join(", ") + ").", done: now }); changed = true;
+    }
+  });
+  return changed;
+}
+// what needs my answer: open votes I haven't answered, and ranked exercises I haven't linked yet (I joined later)
+function gTodo(g) {
+  return Object.entries(g.ex || {}).filter(([, x]) => {
+    const v = (x.votes || {})[uid];
+    return (x.status === "pending" && !v) || (x.status === "ranked" && !(x.links || {})[uid] && v !== "no");
+  });
+}
+
+/* loading + sending my best sets (automatic: runs after the log changes) */
+function gSchedule(fromSet) {
+  if (!myGroups().length) return;
+  if (fromSet) gFromSet = Date.now();
+  clearTimeout(gSyncTimer); gSyncTimer = setTimeout(() => loadGroups(), fromSet ? 1200 : 2500);
+}
+async function loadGroups() {
+  if (!be || !uid || !be.getGroup) return;
+  if (gLoading) { gAgain = true; return; }
+  gLoading = true; const gone = [];
+  try {
+    for (const gid of myGroups()) {
+      let d;
+      try { d = await be.getGroup(gid); } catch (e) { continue; }   // offline: keep what we have
+      if (!d || !(d.memberIds || []).includes(uid)) { gone.push([gid, d]); delete groups[gid]; continue; }
+      if (resolveVotes(clone(d), Date.now())) { try { d = (await be.mutateGroup(gid, x => resolveVotes(x, Date.now()) ? x : null)) || d; } catch (e) {} }
+      let b; try { b = await be.getBests(gid); } catch (e) { b = clone((groups[gid] || {}).b || {}); }
+      const mine = myBestsFor(d);
+      if (JSON.stringify(b[uid] || {}) !== JSON.stringify(mine)) { b[uid] = mine; be.setBests(gid, uid, mine).catch(() => {}); }
+      groups[gid] = { d, b };
+    }
+  } finally { gLoading = false; }
+  if (gone.length) {
+    prefs = { ...prefs, groups: myGroups().filter(x => !gone.some(g => g[0] === x)) }; savePrefs();
+    gone.forEach(([, d]) => { if (d) gInfo("You're no longer in " + d.name, "The group leader removed you from " + d.name + ". Your own log isn't affected."); });
+  }
+  gNotify();
+  if (tab === "group") renderGroup();
+  if (gAgain) { gAgain = false; loadGroups(); }
+}
+
+/* news: someone took your #1, you took #1 (👑), votes passed or dropped */
+let gInfoChain = Promise.resolve();
+function gInfo(title, text) {
+  gInfoChain = gInfoChain.then(async () => {
+    $("askNo").hidden = true;
+    try { await askConfirm(title, text, "OK"); } finally { $("askNo").hidden = false; }
+  });
+}
+function gNotify() {
+  const key = "gSeen_" + uid; let seen = {}; try { seen = JSON.parse(mem.get(key) || "{}") || {}; } catch (e) {}
+  const fresh = Date.now() - gFromSet < 20000, news = [];
+  Object.entries(groups).forEach(([gid, G]) => {
+    const g = G.d, s = seen[gid] = seen[gid] || { lead: {}, st: {} }, first = !s.init;
+    Object.entries(g.ex || {}).forEach(([id, x]) => {
+      if (!first && s.st[id] && s.st[id] !== x.status) {
+        if (x.status === "ranked" && s.st[id] === "pending") toast(x.name + " is now ranked in " + g.name + ": everyone voted yes.");
+        if (x.status === "dropped") gInfo("Vote dropped: " + x.name, x.reason || "The vote didn't pass.");
+        if (x.status === "removed") gInfo(x.name + " removed", "The group leader removed " + x.name + " from the rankings in " + g.name + ".");
+      }
+      s.st[id] = x.status;
+      if (x.status !== "ranked") return;
+      const rows = gBoard(gid, id), top = rows[0], lead = top ? top.u : "", was = s.lead[id];
+      if (!first && was === uid && lead && lead !== uid) {
+        const me = rows.findIndex(r => r.u === uid);
+        news.push({ title: gMemberName(g, lead) + " beat your " + x.name + " record", sub: fmtW(top.w) + " × " + top.r + (me >= 0 ? " · you're now #" + (me + 1) : "") + " in " + g.name });
+      }
+      if (!first && fresh && lead === uid && was && was !== uid) celebrate("crown", { group: g.name, ex: x.name, w: top.w, r: top.r, from: gMemberName(g, was) });
+      s.lead[id] = lead;
+    });
+    s.init = true;
+  });
+  Object.keys(seen).forEach(k => { if (!groups[k] && !myGroups().includes(k)) delete seen[k]; });
+  mem.set(key, JSON.stringify(seen));
+  news.forEach(n => {
+    if (!$("intro").hidden) { const b = el("div", "gnews"); b.append(el("span", "gnicon", "🔥")); const t = el("div"); t.append(el("b", null, n.title), el("small", null, n.sub)); b.appendChild(t); $("introBody").prepend(b); }
+    else toast("🔥 " + n.title);
+  });
+}
+
+// renaming an exercise keeps it linked in every group
+async function gRename(oldName, newName) {
+  for (const gid of Object.keys(groups)) {
+    const g = groups[gid].d;
+    if (!Object.values(g.ex || {}).some(x => (x.links || {})[uid] === oldName)) continue;
+    try {
+      const d = await be.mutateGroup(gid, d => { let ch = false; Object.values(d.ex || {}).forEach(x => { if ((x.links || {})[uid] === oldName) { x.links[uid] = newName; ch = true; } }); return ch ? d : null; });
+      if (d) groups[gid].d = d;
+    } catch (e) {}
+  }
+  gSchedule(false);
+}
+
+/* ---------- group screens ---------- */
+function gGo(view, extra) {
+  const sub = v => !["group", "home"].includes(v), was = gUI.view;
+  if (sub(view) && !sub(was)) pushLayer("grp");
+  if (!sub(view) && sub(was)) popLayer("grp");
+  gUI = { ...gUI, ...(extra || {}), view }; gOpenVote = null; gProposing = false;
+  if (gUI.gid) mem.set("gid", gUI.gid);
+  renderGroup(); window.scrollTo(0, 0);
+}
+const gBtn = (cls, text, fn) => { const b = el("button", cls, text); b.type = "button"; b.onclick = fn; return b; };
+const gBack = (text, to) => { const b = gBtn("gback", "‹ " + text, () => gGo(to || "group")); return b; };
+function gAvatar(g, u) { const a = el("span", "gav", gMemberName(g, u).trim().charAt(0).toUpperCase() || "?"); a.style.background = gColor(g, u); a.setAttribute("aria-hidden", "true"); return a; }
+function gErr(e) {
+  const c = e && (e.code || e.message) || "";
+  if (/locked/.test(c)) return "This group is locked by its leader, so no one new can join right now.";
+  if (/full/.test(c)) return "This group is full (" + G_MAX + " members).";
+  if (/gone/.test(c)) return "This group doesn't exist any more.";
+  if (/permission/i.test(c)) return "You don't have permission to do that. Check that the latest Firestore rules are published.";
+  return navigator.onLine ? "Something went wrong. Try again." : "You're offline. Groups need a connection.";
+}
+async function gShareCode(g) {
+  const text = "Join my gym group \"" + g.name + "\" in Gym Log: open the Group tab, tap Join with a code and enter " + g.code + "\nhttps://giorgosth3.github.io/gym-log/";
+  try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(text); toast("Invite copied. Paste it to your friends."); } catch (e) { toast("Your group code is " + g.code + "."); }
+}
+async function gCopyCode(g) { try { await navigator.clipboard.writeText(g.code); toast("Copied " + g.code + "."); } catch (e) { toast("Your group code is " + g.code + "."); } }
+
+function renderGroup() {
+  const box = $("grp"); if (!box) return; box.innerHTML = "";
+  if (gUI.view === "create") return gCreateView(box);
+  if (gUI.view === "join") return gJoinView(box);
+  if (!myGroups().length) { gUI.view = "home"; return gEmpty(box); }
+  if (!gUI.gid || !myGroups().includes(gUI.gid)) gUI.gid = myGroups()[0];
+  const G = groups[gUI.gid];
+  if (!G) { box.appendChild(el("div", "empty", navigator.onLine ? "Loading your group…" : "You're offline. Your group will load when you're back online.")); if (navigator.onLine) loadGroups(); return; }
+  if (gUI.view === "board" && (G.d.ex || {})[gUI.ex]) return gBoardView(box, G);
+  if (gUI.view === "votes") return gVotesView(box, G);
+  if (gUI.view === "settings") return gSettingsView(box, G);
+  gUI.view = "group"; gGroupView(box, G);
+}
+function gEmpty(box) {
+  const c = el("div", "card gempty");
+  c.append(el("div", "gemoji", "🏋️"), el("h2", "gh2", "Train with friends"), el("p", "muted", "Make a private group with friends from your gym. See who lifts the heaviest on the exercises you all do."));
+  box.append(c, gBtn("save", "Create a group", () => gGo("create")), gBtn("ghost", "Join with a code", () => gGo("join")));
+  box.appendChild(el("p", "small gnote", "Friends only see the name you choose and your best set on exercises the group votes in. Never your other sets, history, body weight or email."));
+}
+function gNameField(box, id, label, value, max) {
+  const l = el("label", "lbl", label); l.htmlFor = id; const i = el("input"); i.id = id; i.type = "text"; i.maxLength = max || 24; i.value = value || ""; i.autocomplete = "off";
+  box.append(l, i); return i;
+}
+function gCreateView(box) {
+  box.appendChild(gBack(myGroups().length ? "Back to your group" : "Back", myGroups().length ? "group" : "home"));
+  box.appendChild(el("h2", "gh2", "Create a group"));
+  const c = el("div", "card"); box.appendChild(c);
+  const name = gNameField(c, "gNewName", "Group name", "", 30); name.placeholder = "e.g. VIP Gym crew";
+  const me2 = gNameField(c, "gNewMe", "Your name in the group", firstName(), 20);
+  const msg = el("p", "small gmsg"); c.appendChild(msg);
+  const go = gBtn("save", "Create", async () => {
+    const n = name.value.trim().replace(/\s+/g, " "), m = me2.value.trim().replace(/\s+/g, " ");
+    if (!n) { msg.textContent = "Give your group a name."; name.focus(); return; }
+    if (!m) { msg.textContent = "Add the name your friends will see."; me2.focus(); return; }
+    if (myGroups().length >= G_PER) { msg.textContent = "You can be in up to " + G_PER + " groups. Leave one first."; return; }
+    await busy(go, async () => {
+      const gid = newId(20), now = Date.now();
+      const d = { v: 1, name: n, leader: uid, locked: false, created: now, memberIds: [uid], members: { [uid]: { name: m, joined: now } }, ex: {} };
+      for (let i = 0; i < 4; i++) {
+        d.code = randomCode();
+        try { await be.createGroup(gid, d.code, d); break; }
+        catch (e) { if (e && e.code === "taken" && i < 3) continue; msg.textContent = gErr(e); return; }
+      }
+      groups[gid] = { d, b: {} }; prefs = { ...prefs, groups: [...myGroups(), gid] }; savePrefs();
+      gGo("group", { gid }); toast("Group created. Share the code " + d.code + " with your friends.");
+    });
+  });
+  c.appendChild(go);
+  setTimeout(() => name.focus(), 50);
+}
+function gJoinView(box) {
+  box.appendChild(gBack(myGroups().length ? "Back to your group" : "Back", myGroups().length ? "group" : "home"));
+  box.appendChild(el("h2", "gh2", "Join a group"));
+  const c = el("div", "card"); box.appendChild(c);
+  const code = gNameField(c, "gJoinCode", "Group code", "", 12); code.placeholder = "e.g. VIP7K2"; code.autocapitalize = "characters"; code.classList.add("gcodein");
+  code.oninput = () => { const p = code.selectionStart; code.value = cleanCode(code.value); try { code.setSelectionRange(p, p); } catch (e) {} };
+  const me2 = gNameField(c, "gJoinMe", "Your name in the group", firstName(), 20);
+  const msg = el("p", "small gmsg"); c.appendChild(msg);
+  const go = gBtn("save", "Join", async () => {
+    const k = cleanCode(code.value), m = me2.value.trim().replace(/\s+/g, " ");
+    if (k.length < 4) { msg.textContent = "Enter the code your friend shared."; code.focus(); return; }
+    if (!m) { msg.textContent = "Add the name your friends will see."; me2.focus(); return; }
+    await busy(go, async () => {
+      let f; try { f = await be.groupByCode(k); } catch (e) { msg.textContent = gErr(e); return; }
+      if (!f) { msg.textContent = "No group has the code " + k + ". Check it with your friend."; return; }
+      if (myGroups().includes(f.gid)) { gGo("group", { gid: f.gid }); return; }
+      if (myGroups().length >= G_PER) { msg.textContent = "You can be in up to " + G_PER + " groups. Leave one first."; return; }
+      let d;
+      try {
+        d = await be.mutateGroup(f.gid, d => {
+          if ((d.memberIds || []).includes(uid)) return null;
+          if (d.locked) throw Object.assign(new Error("locked"), { code: "locked" });
+          if ((d.memberIds || []).length >= G_MAX) throw Object.assign(new Error("full"), { code: "full" });
+          d.memberIds = [...(d.memberIds || []), uid]; d.members = { ...(d.members || {}), [uid]: { name: m, joined: Date.now() } }; return d;
+        });
+      } catch (e) { msg.textContent = gErr(e); return; }
+      groups[f.gid] = { d: d || f.data, b: {} }; prefs = { ...prefs, groups: [...myGroups(), f.gid] }; savePrefs();
+      gGo("group", { gid: f.gid }); toast("You joined " + (d || f.data).name + "."); loadGroups();
+    });
+  });
+  c.appendChild(go);
+  setTimeout(() => code.focus(), 50);
+}
+function gSwitcher(box) {
+  const ids = myGroups();
+  const row = el("div", "gswitch");
+  ids.forEach(id => { const n = groups[id] ? groups[id].d.name : "…"; const b = gBtn(id === gUI.gid ? "on" : "", n, () => gGo("group", { gid: id })); b.setAttribute("aria-pressed", id === gUI.gid); row.appendChild(b); });
+  if (ids.length < G_PER) row.appendChild(gBtn("gadd", "+ Group", () => { askNew(); }));
+  box.appendChild(row);
+  async function askNew() { const ok = await askConfirm("Another group", "Create a new group, or join one with a code from a friend?", "Create", "Join with a code"); gGo(ok ? "create" : "join"); }
+}
+function gGroupView(box, G) {
+  const g = G.d;
+  gSwitcher(box);
+  const hd = el("div", "ghead"), t = el("div");
+  t.append(el("h2", "gh2", g.name), el("span", "small", (g.memberIds || []).length + " member" + ((g.memberIds || []).length === 1 ? "" : "s") + " · code " + g.code + (g.locked ? " · locked 🔒" : "")));
+  const set = gBtn("gicon", "⚙︎", () => gGo("settings")); set.setAttribute("aria-label", "Group settings");
+  hd.append(t, set); box.appendChild(hd);
+  if ((g.memberIds || []).length < 2) {
+    const c = el("div", "card ginvite"); c.append(el("b", null, "Invite your friends"), el("p", "muted", "They open the Group tab, tap Join with a code and enter:"));
+    const code = el("div", "gcode", g.code); c.appendChild(code);
+    const r = el("div", "btns"); r.append(gBtn("use", "Copy code", () => gCopyCode(g)), gBtn("use primary", "Share invite…", () => gShareCode(g))); c.appendChild(r);
+    box.appendChild(c);
+  }
+  const todo = gTodo(g);
+  if (todo.length) {
+    const c = gBtn("card gvotebar", "", () => gGo("votes")); c.append(el("span", "gbig", "🗳️"));
+    const tt = el("span", "gvt"); tt.append(el("b", null, todo.length + (todo.length === 1 ? " exercise needs" : " exercises need") + " your vote"), el("small", null, todo.slice(0, 3).map(([, x]) => x.name).join(" · ")));
+    c.append(tt, el("span", "muted", "›")); box.appendChild(c);
+  }
+  const rk = gRanked(g);
+  if (!rk.length) {
+    const c = el("div", "card"); c.append(el("b", null, "No ranked exercises yet"), el("p", "muted", "Propose an exercise from your plan. When every member votes yes, it gets a leaderboard, and your Training sets count automatically."));
+    c.appendChild(gBtn("use primary", "Vote on exercises", () => gGo("votes"))); box.appendChild(c); return;
+  }
+  // most first places = the group's overall rank
+  const firsts = {}; (g.memberIds || []).forEach(u => { firsts[u] = 0; });
+  rk.forEach(([id]) => { const top = gBoard(gUI.gid, id)[0]; if (top && top.u in firsts) firsts[top.u]++; });
+  const order = Object.keys(firsts).sort((a, b) => firsts[b] - firsts[a] || gOrder(g).indexOf(a) - gOrder(g).indexOf(b)).filter(u => firsts[u] > 0).slice(0, 3);
+  if (order.length) {
+    const c = el("div", "card"); c.appendChild(el("span", "gk", "Most first places 🥇"));
+    const st = el("div", "gpodium"), slot = [order[1], order[0], order[2]], hs = [76, 100, 60];
+    slot.forEach((u, i) => {
+      const d = el("div", u ? (i === 1 ? "p1" : "") : "pnone"); d.style.height = hs[i] + "px";
+      if (u) { d.append(el("b", null, gWho(g, u) + (i === 1 ? " 👑" : "")), el("span", null, String(firsts[u]))); }
+      st.appendChild(d);
+    });
+    c.appendChild(st); box.appendChild(c);
+  }
+  const c = el("div", "card glist"); c.appendChild(el("span", "gk", "Ranked exercises · voted in by everyone"));
+  rk.forEach(([id, x]) => {
+    const rows = gBoard(gUI.gid, id), top = rows[0], mi = rows.findIndex(r => r.u === uid);
+    const r = gBtn("gx", "", () => gGo("board", { ex: id }));
+    const n = el("span", "gxn"); n.append(el("b", null, x.name), el("small", null, top ? "🥇 " + gWho(g, top.u) + " · " + fmtW(top.w) + " × " + top.r : "No sets yet"));
+    const pos = el("span", "gpos" + (mi === 0 ? " one" : ""), mi >= 0 ? "You #" + (mi + 1) : (x.links || {})[uid] ? "No sets" : "Not linked");
+    r.append(n, pos); c.appendChild(r);
+  });
+  box.appendChild(c);
+  box.appendChild(gBtn("ghost", "Exercise votes", () => gGo("votes")));
+}
+function gBoardView(box, G) {
+  const g = G.d, id = gUI.ex, x = g.ex[id], rows = gBoard(gUI.gid, id);
+  box.appendChild(gBack(g.name));
+  box.append(el("h2", "gh2", x.name), el("p", "muted gsub", "Ranked by heaviest weight, then most reps. Updates automatically from your Training sets."));
+  const c = el("div", "card glb");
+  if (!rows.length) c.appendChild(el("p", "muted", "No sets yet. Log " + x.name + " on Training to get on the board."));
+  rows.forEach((r, i) => {
+    const row = el("div", "grow" + (r.u === uid ? " me" : ""));
+    row.appendChild(el("span", "gmedal", ["🥇", "🥈", "🥉"][i] || String(i + 1)));
+    row.appendChild(gAvatar(g, r.u));
+    const jump = r.prev && r.w > r.prev * G_JUMP;
+    const n = el("span", "gxn"), nb = el("b", null, gWho(g, r.u)); if (jump) nb.appendChild(el("span", "gflag", "⚠️ new jump"));
+    n.append(nb, el("small", null, gDateLbl(r.d))); row.appendChild(n);
+    const v = el("span", "gval", fmtW(r.w) + " × " + r.r); if (jump) v.appendChild(el("small", null, "was " + fmtW(r.prev)));
+    row.appendChild(v); c.appendChild(row);
+  });
+  box.appendChild(c);
+  const mi = rows.findIndex(r => r.u === uid), linked = (x.links || {})[uid];
+  if (mi > 0) {
+    const top = rows[0], me2 = rows[mi], t = el("div", "card gtarget"); t.appendChild(el("span", "gbig", "🎯"));
+    const tt = el("div");
+    if (top.w > me2.w) tt.append(el("b", null, fmtW(top.w - me2.w) + " to take #1"), el("small", null, "Beat " + fmtW(top.w) + " × " + top.r + ": " + fmtW(top.w) + " × " + (top.r + 1) + " or anything heavier."));
+    else { const n = top.r - me2.r + 1; tt.append(el("b", null, n + " more rep" + (n === 1 ? "" : "s") + " to take #1"), el("small", null, "Do " + fmtW(top.w) + " × " + (top.r + 1) + " or go heavier.")); }
+    t.appendChild(tt); box.appendChild(t);
+  } else if (mi === 0 && rows.length > 1) { const t = el("div", "card gtarget"); t.append(el("span", "gbig", "👑"), el("b", null, "You're #1. Keep it that way.")); box.appendChild(t); }
+  if (linked) box.appendChild(el("p", "small", "Counts your sets of: " + linked));
+  else { const t = el("div", "card"); t.append(el("b", null, "You're not on this board yet"), el("p", "muted", "Link one of your exercises to " + x.name + " and your sets will count.")); t.appendChild(gBtn("use primary", "Link my exercise", () => gGo("votes"))); box.appendChild(t); }
+  if (gIsLeader(g)) box.appendChild(gBtn("ghost gdanger", "Remove from rankings", async () => {
+    if (!await askConfirm("Remove " + x.name + "?", "It disappears from the rankings for everyone in " + g.name + ". Nobody's logged sets are deleted. It can be voted in again later.", "Remove", "Cancel")) return;
+    try { const d = await be.mutateGroup(gUI.gid, d => { const e = (d.ex || {})[id]; if (!e) return null; Object.assign(e, { status: "removed", done: Date.now() }); return d; }); if (d) groups[gUI.gid].d = d; gGo("group"); toast("Removed " + x.name + " from the rankings."); }
+    catch (e) { toast(gErr(e), true); }
+  }));
+}
+// pick one of my exercises (best name match first)
+function gPicker(target, exclude) {
+  const names = knownNames().filter(n => !(exclude || []).includes(n));
+  const sel = el("select", "gsel");
+  const score = n => target ? (squash(n) === squash(target) ? 0 : matchScore(n, target) >= 0 ? 1 : (lev(squash(n), squash(target)) <= 3 ? 2 : 3)) : 3;
+  names.map((n, i) => [n, score(n), i]).sort((a, b) => a[1] - b[1] || a[2] - b[2]).forEach(([n]) => { const o = el("option", null, n); o.value = n; sel.appendChild(o); });
+  return sel;
+}
+async function gVote(gid, id, yes, name) {
+  try {
+    const d = await be.mutateGroup(gid, d => {
+      const x = (d.ex || {})[id]; if (!x) return null;
+      x.votes = { ...(x.votes || {}), [uid]: yes ? "yes" : "no" }; if (yes) x.links = { ...(x.links || {}), [uid]: name };
+      resolveVotes(d, Date.now()); return d;
+    });
+    if (d) groups[gid].d = d;
+    const x = groups[gid].d.ex[id];
+    toast(yes ? (x.status === "ranked" ? x.name + " is ranked. Your sets of " + name + " count from now on." : "Voted yes. Waiting for the others.") : "Got it. You won't be on the " + x.name + " board.");
+    gOpenVote = null; renderGroup(); loadGroups();
+  } catch (e) { toast(gErr(e), true); }
+}
+function gVotesView(box, G) {
+  const g = G.d, n = (g.memberIds || []).length;
+  box.appendChild(gBack(g.name));
+  box.append(el("h2", "gh2", "Exercise votes"), el("p", "muted gsub", "An exercise joins the rankings when every member votes yes. Votes close after " + G_VOTE_DAYS + " days."));
+  if (!knownNames().length) box.appendChild(el("div", "empty", "Add exercises to your plan first (Settings → Workout days & exercises), then you can vote."));
+  const yesCount = x => (g.memberIds || []).filter(u => (x.votes || {})[u] === "yes").length;
+  const todo = gTodo(g);
+  if (todo.length && knownNames().length) {
+    const c = el("div", "card"); c.appendChild(el("span", "gk", "Needs your vote"));
+    todo.forEach(([id, x]) => {
+      const it = el("div", "gvote");
+      const late = x.status === "ranked";
+      it.append(el("b", null, x.name), el("small", "muted", late ? "Already ranked · link yours to join the board" : "Proposed by " + gWho(g, x.by) + " · " + yesCount(x) + " of " + n + " voted yes"));
+      const lbl = el("span", "small", "Which of your exercises is this? Your sets of it will count automatically.");
+      const sel = gPicker(x.name); sel.setAttribute("aria-label", "Your exercise for " + x.name);
+      const r = el("div", "btns");
+      r.append(gBtn("use", "I don't do it", () => gVote(gUI.gid, id, false)), gBtn("use primary", late ? "Link it" : "Vote yes", () => gVote(gUI.gid, id, true, sel.value)));
+      it.append(lbl, sel, r); c.appendChild(it);
+    });
+    box.appendChild(c);
+  }
+  const waiting = Object.entries(g.ex || {}).filter(([, x]) => x.status === "pending" && (x.votes || {})[uid]);
+  if (waiting.length) {
+    const c = el("div", "card"); c.appendChild(el("span", "gk", "Waiting for others"));
+    waiting.forEach(([, x]) => {
+      const left = (g.memberIds || []).filter(u => !(x.votes || {})[u]).map(u => gMemberName(g, u));
+      const daysLeft = Math.max(1, Math.ceil(((x.at || Date.now()) + G_VOTE_DAYS * 864e5 - Date.now()) / 864e5));
+      const it = el("div", "gx gstatic"), t = el("span", "gxn");
+      t.append(el("b", null, x.name), el("small", null, yesCount(x) + " of " + n + " voted yes · waiting for " + left.join(", ") + " · " + daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left"));
+      it.append(t, el("span", "gpos", "✓ Voted")); c.appendChild(it);
+    });
+    box.appendChild(c);
+  }
+  const recent = Object.entries(g.ex || {}).filter(([, x]) => x.status === "dropped" && Date.now() - (x.done || 0) < 30 * 864e5);
+  if (recent.length) {
+    const c = el("div", "card"); c.appendChild(el("span", "gk", "Didn't make it"));
+    recent.forEach(([, x]) => { const it = el("div", "gx gstatic"), t = el("span", "gxn"); t.append(el("b", null, x.name), el("small", null, x.reason || "")); it.append(t, el("span", "gpos", "✗")); c.appendChild(it); });
+    box.appendChild(c);
+  }
+  // propose
+  const active = Object.values(g.ex || {}).filter(x => x.status === "pending" || x.status === "ranked");
+  const used = active.map(x => (x.links || {})[uid]).filter(Boolean);
+  if (!knownNames().length) return;
+  if (!gProposing) { box.appendChild(gBtn("save", "+ Propose an exercise", () => { gProposing = true; renderGroup(); })); return; }
+  const c = el("div", "card"); c.append(el("b", null, "Propose an exercise"), el("p", "muted", "Pick one of yours. Everyone else links their own version when they vote, so names don't have to match."));
+  const sel = gPicker(null, used); if (!sel.options.length) { c.appendChild(el("p", "small", "All your exercises are already ranked or in a vote.")); box.appendChild(c); return; }
+  c.appendChild(sel);
+  const msg = el("p", "small gmsg"); c.appendChild(msg);
+  const r = el("div", "btns");
+  const go = gBtn("use primary", "Propose", async () => {
+    const name = sel.value, dup = active.find(x => squash(x.name) === squash(name));
+    if (dup) { msg.textContent = dup.status === "ranked" ? dup.name + " is already ranked. Link yours to it above." : dup.name + " is already in a vote. Vote on it above."; return; }
+    if (active.length >= G_EX_MAX) { msg.textContent = "This group has the maximum of " + G_EX_MAX + " exercises."; return; }
+    await busy(go, async () => {
+      try {
+        const id = newId(10);
+        const d = await be.mutateGroup(gUI.gid, d => { d.ex = d.ex || {}; d.ex[id] = { name, by: uid, at: Date.now(), status: "pending", votes: { [uid]: "yes" }, links: { [uid]: name } }; resolveVotes(d, Date.now()); return d; });
+        if (d) groups[gUI.gid].d = d; gProposing = false;
+        toast(groups[gUI.gid].d.ex[id].status === "ranked" ? name + " is ranked." : "Proposed " + name + ". Everyone has " + G_VOTE_DAYS + " days to vote.");
+        renderGroup(); loadGroups();
+      } catch (e) { msg.textContent = gErr(e); }
+    });
+  });
+  r.append(gBtn("use", "Cancel", () => { gProposing = false; renderGroup(); }), go); c.appendChild(r);
+  box.appendChild(c);
+}
+async function gMutate(fn, okMsg) {
+  try { const d = await be.mutateGroup(gUI.gid, fn); if (d) groups[gUI.gid].d = d; if (okMsg) toast(okMsg); renderGroup(); return true; }
+  catch (e) { toast(gErr(e), true); return false; }
+}
+function gSettingsView(box, G) {
+  const g = G.d, lead = gIsLeader(g);
+  box.appendChild(gBack(g.name));
+  box.appendChild(el("h2", "gh2", "Group settings"));
+  // members
+  const mc = el("div", "card glist"); mc.appendChild(el("span", "gk", "Members · " + (g.memberIds || []).length + " of " + G_MAX));
+  gOrder(g).forEach(u => {
+    const r = el("div", "grow"); r.appendChild(gAvatar(g, u));
+    const n = el("span", "gxn"); n.append(el("b", null, gMemberName(g, u) + (u === uid ? " (you)" : "") + (g.leader === u ? " 👑" : "")), el("small", null, g.leader === u ? "Leader" : "Joined " + new Date(((g.members || {})[u] || {}).joined || Date.now()).toLocaleDateString(undefined, { day: "numeric", month: "short" })));
+    r.appendChild(n);
+    if (lead && u !== uid) {
+      const b = el("div", "btns");
+      b.append(gBtn("use", "Make leader", async () => {
+        if (!await askConfirm("Make " + gMemberName(g, u) + " the leader?", "They'll be able to remove members, rename the group, change the code, lock it and remove ranked exercises. You'll become a normal member.", "Make leader", "Cancel")) return;
+        gMutate(d => { if (!(d.memberIds || []).includes(u)) return null; d.leader = u; return d; }, gMemberName(g, u) + " is now the leader.");
+      }), gBtn("use gdanger", "Remove", async () => {
+        if (!await askConfirm("Remove " + gMemberName(g, u) + "?", "They'll leave " + g.name + " and their entries disappear from the rankings. Their own log isn't affected. They can rejoin with the code unless you change it or lock the group.", "Remove", "Cancel")) return;
+        try { await be.delBests(gUI.gid, u); } catch (e) {}
+        if (await gMutate(d => { d.memberIds = (d.memberIds || []).filter(x => x !== u); if (d.members) delete d.members[u]; return d; }, "Removed " + gMemberName(g, u) + ".")) { if (groups[gUI.gid].b) delete groups[gUI.gid].b[u]; renderGroup(); }
+      }));
+      r.appendChild(b);
+    }
+    mc.appendChild(r);
+  });
+  box.appendChild(mc);
+  // my name
+  const nc = el("div", "card"); const nm = gNameField(nc, "gMyName", "Your name in this group", gMemberName(g, uid), 20);
+  nc.appendChild(gBtn("use", "Save name", () => { const v = nm.value.trim().replace(/\s+/g, " "); if (!v) return; gMutate(d => { if (!d.members || !d.members[uid]) return null; d.members[uid].name = v; return d; }, "Saved."); }));
+  box.appendChild(nc);
+  // invite code
+  const cc = el("div", "card"); cc.appendChild(el("span", "gk", "Invite code"));
+  cc.appendChild(el("div", "gcode", g.code));
+  const cb = el("div", "btns"); cb.append(gBtn("use", "Copy code", () => gCopyCode(g)), gBtn("use primary", "Share invite…", () => gShareCode(g)));
+  cc.appendChild(cb);
+  if (g.locked) cc.appendChild(el("p", "small", "🔒 Locked: no one new can join, even with the code."));
+  if (lead) {
+    const lb = el("div", "btns");
+    lb.append(gBtn("use", "New code", async () => {
+      if (!await askConfirm("Make a new code?", "The current code " + g.code + " stops working. Members already in the group stay.", "New code", "Cancel")) return;
+      for (let i = 0; i < 4; i++) {
+        const k = randomCode();
+        try { await be.changeGroupCode(gUI.gid, g.code, k); groups[gUI.gid].d = { ...groups[gUI.gid].d, code: k }; toast("New code: " + k); renderGroup(); return; }
+        catch (e) { if (e && e.code === "taken" && i < 3) continue; toast(gErr(e), true); return; }
+      }
+    }), gBtn("use", g.locked ? "Unlock group" : "Lock group", () => gMutate(d => { d.locked = !d.locked; return d; }, g.locked ? "Unlocked. Friends can join with the code." : "Locked. No one new can join.")));
+    cc.appendChild(lb);
+  }
+  box.appendChild(cc);
+  if (lead) {
+    const rc = el("div", "card"); const rn = gNameField(rc, "gRename", "Group name", g.name, 30);
+    rc.appendChild(gBtn("use", "Rename group", () => { const v = rn.value.trim().replace(/\s+/g, " "); if (!v) return; gMutate(d => { d.name = v; return d; }, "Renamed to " + v + "."); }));
+    box.appendChild(rc);
+  }
+  const pc = el("div", "card"); pc.appendChild(el("span", "gk", "What your group sees"));
+  pc.appendChild(el("p", "muted gsees", "✓ The name you chose for this group\n✓ Your best set (weight × reps, date) on exercises the group voted in\n✓ Your votes on proposed exercises\n✗ Your other sets, history, plan, body weight or email"));
+  box.appendChild(pc);
+  if (lead) box.appendChild(el("p", "small", "You're the leader 👑: you can remove members, change the code, lock the group, rename it and remove ranked exercises. You can't change anyone's sets."));
+  box.appendChild(gBtn("ghost gdanger", "Leave group", () => gLeave(g)));
+}
+async function gLeave(g) {
+  const gid = gUI.gid, alone = (g.memberIds || []).length <= 1;
+  const text = alone ? "You're the only member, so the group and its code will be deleted." : "Your entries disappear from the rankings. Your own log isn't affected." + (gIsLeader(g) ? " The member who joined earliest becomes the leader." : "");
+  if (!await askConfirm("Leave " + g.name + "?", text, "Leave", "Cancel")) return;
+  try {
+    await be.delBests(gid, uid).catch(() => {});
+    let empty = false;
+    await be.mutateGroup(gid, d => {
+      d.memberIds = (d.memberIds || []).filter(x => x !== uid); if (d.members) delete d.members[uid];
+      if (!d.memberIds.length) { empty = true; return null; }
+      if (d.leader === uid) d.leader = gOrder(d)[0];
+      return d;
+    });
+    if (empty) await be.deleteGroup(gid, g.code);
+  } catch (e) { if (!(e && e.code === "gone")) { toast(gErr(e), true); return; } }
+  delete groups[gid]; prefs = { ...prefs, groups: myGroups().filter(x => x !== gid) }; savePrefs();
+  gGo("group", { gid: myGroups()[0] || null }); toast("You left " + g.name + ".");
 }
 
 /* ---------- wiring ---------- */
@@ -2087,7 +2611,7 @@ async function start() {
   catch (e) { show("gate"); $("signin").disabled = true; $("gateMsg").textContent = "Couldn't load. Check your connection and reopen the app."; return; }
   be.onUser(u => {
     if (unsub) { unsub(); unsub = null; }
-    if (!u) { me = null; $("gateReset").hidden = true; $("gateMain").hidden = false; setEmMode("in"); uid = null; sessions = {}; days = []; lists = {}; prefs = { ...DEFAULT_PREFS }; planPending = false; body = { entries: {} }; show("gate"); return; }
+    if (!u) { groups = {}; gUI = { view: "group", gid: null, ex: null }; me = null; $("gateReset").hidden = true; $("gateMain").hidden = false; setEmMode("in"); uid = null; sessions = {}; days = []; lists = {}; prefs = { ...DEFAULT_PREFS }; planPending = false; body = { entries: {} }; show("gate"); return; }
     uid = u.uid; setMe(u); introPending = true;
     // keep the loading screen up until the log has loaded, then go straight to the intro (no flash of the main screen)
     show("loading"); renderTabs(); renderAll();

@@ -60,6 +60,42 @@ export async function firebaseBackend(config, appCheckKey) {
     },
     deletePlan(code) { return F.deleteDoc(F.doc(db, "plans", code)); },
     del(uid, id) { return F.deleteDoc(F.doc(col(uid), id)); },
+    // friends groups: groups/{gid} (members, votes), groups/{gid}/bests/{uid} (each member's best sets),
+    // groupCodes/{CODE} -> gid (so a code can be changed without moving the group)
+    async groupByCode(code) {
+      const c = await F.getDoc(F.doc(db, "groupCodes", code)); if (!c.exists()) return null;
+      const gid = c.data().gid, g = await F.getDoc(F.doc(db, "groups", gid));
+      return g.exists() ? { gid, data: g.data() } : null;
+    },
+    async getGroup(gid) { const g = await F.getDoc(F.doc(db, "groups", gid)); return g.exists() ? g.data() : null; },
+    createGroup(gid, code, data) {
+      return F.runTransaction(db, async tx => {
+        const cref = F.doc(db, "groupCodes", code);
+        if ((await tx.get(cref)).exists()) { const e = new Error("taken"); e.code = "taken"; throw e; }
+        tx.set(F.doc(db, "groups", gid), data); tx.set(cref, { gid, by: data.leader });
+      });
+    },
+    // read-modify-write in one transaction; fn gets the current data and returns the new data (or null: no change)
+    mutateGroup(gid, fn) {
+      return F.runTransaction(db, async tx => {
+        const ref = F.doc(db, "groups", gid), s = await tx.get(ref);
+        if (!s.exists()) { const e = new Error("gone"); e.code = "gone"; throw e; }
+        const next = fn(JSON.parse(JSON.stringify(s.data()))); if (next) tx.set(ref, next); return next;
+      });
+    },
+    changeGroupCode(gid, oldCode, newCode) {
+      return F.runTransaction(db, async tx => {
+        const nref = F.doc(db, "groupCodes", newCode), gref = F.doc(db, "groups", gid);
+        if ((await tx.get(nref)).exists()) { const e = new Error("taken"); e.code = "taken"; throw e; }
+        const g = await tx.get(gref);
+        tx.set(nref, { gid, by: g.data().leader }); tx.update(gref, { code: newCode });
+        if (oldCode) tx.delete(F.doc(db, "groupCodes", oldCode));
+      });
+    },
+    async deleteGroup(gid, code) { if (code) await F.deleteDoc(F.doc(db, "groupCodes", code)).catch(() => {}); await F.deleteDoc(F.doc(db, "groups", gid)); },
+    async getBests(gid) { const s = await F.getDocs(F.collection(db, "groups", gid, "bests")); const o = {}; s.docs.forEach(d => { o[d.id] = d.data(); }); return o; },
+    setBests(gid, uid, data) { return F.setDoc(F.doc(db, "groups", gid, "bests", uid), data); },
+    delBests(gid, uid) { return F.deleteDoc(F.doc(db, "groups", gid, "bests", uid)); },
     // AI coach: Gemini through Firebase AI Logic (no server needed). Loaded only when the chat is first used.
     async chatStream(history, text, system) {
       // App Check proves requests come from this app (loaded only when the coach is first used)
@@ -106,6 +142,23 @@ export function mockBackend() {
     subscribe(uid, cb) { dataCbs.push(cb); setTimeout(() => cb(JSON.parse(JSON.stringify(st.docs)), false), 30); return () => {}; },
     async set(uid, id, data) { st.docs[id] = JSON.parse(JSON.stringify(data)); save(); },
     async del(uid, id) { delete st.docs[id]; save(); },
+    // friends groups (shared between every test user, like plans)
+    ...(() => {
+      const G = () => JSON.parse(localStorage.getItem("gymlog_groups") || '{"groups":{},"codes":{},"bests":{}}');
+      const W = g => localStorage.setItem("gymlog_groups", JSON.stringify(g));
+      const taken = () => { const e = new Error("taken"); e.code = "taken"; return e; };
+      return {
+        async groupByCode(code) { const g = G(), gid = g.codes[code]; return gid && g.groups[gid] ? { gid, data: g.groups[gid] } : null; },
+        async getGroup(gid) { return G().groups[gid] || null; },
+        async createGroup(gid, code, data) { const g = G(); if (g.codes[code]) throw taken(); g.groups[gid] = data; g.codes[code] = gid; W(g); },
+        async mutateGroup(gid, fn) { const g = G(); if (!g.groups[gid]) { const e = new Error("gone"); e.code = "gone"; throw e; } const n = fn(JSON.parse(JSON.stringify(g.groups[gid]))); if (n) { g.groups[gid] = n; W(g); } return n; },
+        async changeGroupCode(gid, oldCode, newCode) { const g = G(); if (g.codes[newCode]) throw taken(); g.codes[newCode] = gid; delete g.codes[oldCode]; g.groups[gid].code = newCode; W(g); },
+        async deleteGroup(gid, code) { const g = G(); delete g.groups[gid]; delete g.codes[code]; delete g.bests[gid]; W(g); },
+        async getBests(gid) { return G().bests[gid] || {}; },
+        async setBests(gid, uid, data) { const g = G(); (g.bests[gid] = g.bests[gid] || {})[uid] = data; W(g); },
+        async delBests(gid, uid) { const g = G(); if (g.bests[gid]) delete g.bests[gid][uid]; W(g); }
+      };
+    })(),
     // shared plans live outside any one account (one list for every test user)
     async getPlan(code) { const all = JSON.parse(localStorage.getItem("gymlog_plans") || "{}"); return all[code] || null; },
     async claimPlan(uid, code, data) {
