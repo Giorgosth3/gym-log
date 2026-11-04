@@ -210,6 +210,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
   font:600 .8rem var(--body);padding:6px 2px;cursor:pointer;border-radius:10px}
 .tabbar button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .tabbar button[aria-current="page"]{color:var(--accent)}
+.tabbar .temo{font:600 1.35rem/24px var(--body);height:24px;display:block}
 .tabbar-inner{max-width:520px}
 /* floating message */
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:40;
@@ -341,10 +342,11 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
 /* ---- training: exercise buttons, pill timer, screen-on ---- */
 .exgrid{display:flex;flex-direction:column;gap:8px}
 .exsec{font:700 .72rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:4px 2px -2px}
-.excur{display:flex;flex-direction:column;border:2px solid var(--accent);border-radius:16px;background:var(--surface);overflow:hidden}
-.excur .curhead{border:0!important;border-radius:0;background:transparent!important;padding:14px 16px 0!important;min-height:0;flex-direction:row;align-items:baseline;justify-content:space-between;cursor:default}
-.excur .curhead span{font:700 1.15rem var(--body)}.excur .curhead small{white-space:nowrap}
-.excur #logCard{border:0;border-radius:0;background:transparent;padding-top:10px}.excur #logCard .cardhead{display:none}
+.exitem{display:flex;flex-direction:column}
+.exitem.open{border:2px solid var(--accent);border-radius:14px;background:var(--surface);overflow:hidden}
+.exitem.open > .exrow{border:0!important;border-radius:0;background:transparent!important}
+.exitem.open .exgo{color:var(--accent);font-size:1.1rem}
+.exitem #logCard{border:0;border-radius:0;background:transparent;padding-top:4px}.exitem #logCard .cardhead{display:none}
 #filledNote{display:none!important}
 #logCard #todayBox{display:flex;flex-wrap:wrap;align-items:center;gap:6px}#logCard #todayBox[hidden]{display:none}#logCard #todayBox .lbl{margin:0}
 #logCard .linkbtn{align-self:center}
@@ -737,6 +739,9 @@ body.touring .chatbub{z-index:19}
 .chatact{display:flex;gap:14px;margin:-2px 0 4px 4px}.chatact button{background:none;border:0;color:var(--muted);font:600 .8rem var(--body);cursor:pointer;padding:2px 0}
 .chatrep{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--accent);border-radius:14px;padding:12px;margin:0 0 6px}
 .chatrep label{display:flex;gap:10px;align-items:center;font-size:.95rem}.chatrep input{accent-color:var(--accent);width:18px;height:18px}
+.docfull{position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;flex-direction:column}
+.dochead{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;border-bottom:1px solid var(--line)}.dochead h2{margin:0;font:700 1.4rem var(--display);text-transform:uppercase}
+#docFrame{flex:1;width:100%;border:0;background:var(--bg)}
 </style>
 </head>
 <body>
@@ -890,11 +895,11 @@ body.touring .chatbub{z-index:19}
   <div id="toast" role="status" aria-live="polite"></div>
 
   <nav class="tabbar" aria-label="Sections">
-    <button data-tab="training"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Training</button>
-    <button data-tab="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</button>
-    <button data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><path d="M5 16l5-5 4 3 6-7"/></svg>Progress</button>
-    <button data-tab="group"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.2a6.5 6.5 0 0 1 3 5.8"/></svg>Group</button>
-    <button data-tab="body"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>Me</button>
+    <button data-tab="training"><span class="temo" aria-hidden="true">🏋️</span>Training</button>
+    <button data-tab="history"><span class="temo" aria-hidden="true">📅</span>History</button>
+    <button data-tab="progress"><span class="temo" aria-hidden="true">📈</span>Progress</button>
+    <button data-tab="group"><span class="temo" aria-hidden="true">👥</span>Group</button>
+    <button data-tab="body"><span class="temo" aria-hidden="true">🙂</span>Me</button>
   </nav>
 
   <!-- Side menu: settings and tools -->
@@ -927,6 +932,10 @@ body.touring .chatbub{z-index:19}
   </div>
   <div class="plan" id="delFull" hidden role="dialog" aria-modal="true" aria-labelledby="delTitle">
     <div class="planpanel"><div class="planbody" id="delBody"></div></div>
+  </div>
+  <div class="docfull" id="docFull" hidden role="dialog" aria-modal="true" aria-labelledby="docTitle">
+    <div class="dochead"><button class="icon-btn" id="docBack" aria-label="Back to the app"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2 id="docTitle">Privacy policy</h2></div>
+    <iframe id="docFrame" title="Privacy policy"></iframe>
   </div>
   <div class="intro" id="intro" hidden role="dialog" aria-modal="true" aria-label="Your week so far. Tap to start">
     <div class="introbody" id="introBody"></div>
@@ -1050,7 +1059,7 @@ body.touring .chatbub{z-index:19}
           </div>
           <span id="who" class="small"></span>
           <button class="ghost danger-ghost" id="signout">Sign out</button>
-          <a class="ghost acclink" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+          <button class="ghost acclink" id="privOpen" type="button">Privacy policy</button>
           <button class="ghost acclink delacc" id="delAcc">Delete account</button>
         </div>
       </details>

@@ -83,9 +83,9 @@ function renderAll() { renderDayBtns(); renderSelect(); renderUnits(); renderSet
 /* ---------- training ---------- */
 function renderSelect() {
   const sel = $("ex"), keep = mem.get("ex_" + day);
-  sel.innerHTML = "";
+  sel.innerHTML = ""; const none = el("option", null, ""); none.value = ""; sel.appendChild(none);
   namesFor(day).forEach(n => sel.appendChild(el("option", null, n)));
-  if (keep && namesFor(day).includes(keep)) sel.value = keep;
+  sel.value = keep && namesFor(day).includes(keep) ? keep : "";
   renderExercise(true);
 }
 // Everything on the logging card for the chosen exercise. prefill=true fills weight/reps.
@@ -117,47 +117,47 @@ function prefillSet() {
     note.textContent = "Filled in from set 1 last time (" + shortDate(last.date) + "). Adjust if needed."; note.hidden = false;
   }
 }
-let noteOpen = false;
+let noteOpen = false, openInDone = false;
+// tap an exercise to open its logger right where it is; tap it again to close it
 function pickEx(ex) {
-  if ($("ex").value !== ex) noteOpen = false;
+  if ($("ex").value === ex) { $("ex").value = ""; mem.set("ex_" + day, ""); noteOpen = false; renderExercise(false); return; }
+  noteOpen = false; openInDone = todaySets(ex).length > 0;
   $("ex").value = ex; mem.set("ex_" + day, ex); renderExercise(true);
-  // bring the logging card (with Save) into view
-  const tgt = $("exGrid").querySelector(".excur") || $("logCard"), hdr = Math.max(...[...document.querySelectorAll(".topbar, #dayBtns")].map(x => x.getBoundingClientRect().bottom), 0);
-  const y = tgt.getBoundingClientRect().top + scrollY - hdr - 10;
-  if (Math.abs(y - scrollY) > 4) window.scrollTo({ top: Math.max(0, y), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  const tgt = $("exGrid").querySelector(".exitem.open"); if (!tgt) return;
+  const hdr = Math.max(...[...document.querySelectorAll(".topbar, #dayBtns")].map(x => x.getBoundingClientRect().bottom), 0), r = tgt.getBoundingClientRect();
+  // only scroll if the opened exercise doesn't fit on screen
+  if (r.top < hdr + 6 || r.bottom > innerHeight - 90) window.scrollTo({ top: Math.max(0, r.top + scrollY - hdr - 10), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
-// Training list: the exercise you're on (with its logger) on top, then "Up next", then "Done today"
+// Training list: "Up next" (not done yet) and "Done today"; tapping one opens its logger in place
 function renderExGrid() {
   const grid = $("exGrid"), cur = $("ex").value, date = $("date").value, isToday = date === todayISO();
   const lc = $("logCard"), pane = $("pane-training");
   if (grid.contains(lc)) pane.appendChild(lc);
   grid.innerHTML = "";
-  const names = namesFor(day), done = names.filter(ex => ex !== cur && todaySets(ex).length), next = names.filter(ex => ex !== cur && !todaySets(ex).length);
+  const names = namesFor(day), has = ex => todaySets(ex).length > 0;
+  // the open exercise stays where it was opened until you close it
+  const inDone = ex => ex === cur ? openInDone : has(ex);
+  const next = names.filter(ex => !inDone(ex)), done = names.filter(ex => inDone(ex));
   const lastLine = ex => { const l = lastSession(ex); return l ? "Last: " + fmtW(l.sets[0].w) + " × " + l.sets[0].r + " · " + l.sets.length + " set" + (l.sets.length > 1 ? "s" : "") : "Not done yet"; };
-  const row = (ex, isDone) => {
-    const b = el("button", "exb exrow" + (isDone ? " done" : "")); b.type = "button"; b.dataset.ex = ex; b.setAttribute("aria-pressed", "false");
-    const n = todaySets(ex), mark = el("span", "exmark", isDone ? "✓" : ""), txt = el("span", "extxt");
+  const item = ex => {
+    const open = ex === cur, n = todaySets(ex), wrap = el("div", "exitem" + (open ? " open" : ""));
+    const b = el("button", "exb exrow" + (n.length ? " done" : "")); b.type = "button"; b.dataset.ex = ex; b.setAttribute("aria-expanded", String(open));
+    const mark = el("span", "exmark", n.length ? "✓" : ""), txt = el("span", "extxt");
     txt.appendChild(el("span", null, ex));
-    if (isDone) { const ch = el("small", "exdone"); ch.textContent = n.map(x => trim(disp(x.w)) + "×" + x.r).slice(0, 3).join("  ") + (n.length > 3 ? "  +" + (n.length - 3) : ""); txt.appendChild(ch); }
+    if (n.length) { const ch = el("small", "exdone"); ch.textContent = n.map(x => trim(disp(x.w)) + "×" + x.r).slice(0, 3).join("  ") + (n.length > 3 ? "  +" + (n.length - 3) : ""); txt.appendChild(ch); }
     else txt.appendChild(el("small", null, lastLine(ex)));
-    b.append(mark, txt, el("span", "exgo", isDone ? n.length + " set" + (n.length > 1 ? "s" : "") : "›"));
-    b.setAttribute("aria-label", ex + (isDone ? ", " + n.length + " set" + (n.length > 1 ? "s" : "") + " done" : ", " + lastLine(ex)));
+    b.append(mark, txt, el("span", "exgo", open ? "⌃" : n.length ? n.length + " set" + (n.length > 1 ? "s" : "") : "⌄"));
+    b.setAttribute("aria-label", ex + (n.length ? ", " + n.length + " set" + (n.length > 1 ? "s" : "") + " today" : ", " + lastLine(ex)) + (open ? ". Tap to close" : ". Tap to log sets"));
     b.onclick = () => { if (dragJustEnded) { dragJustEnded = false; return; } pickEx(ex); };
-    return b;
+    wrap.appendChild(b); if (open) wrap.appendChild(lc);
+    return wrap;
   };
-  if (cur || next.length) grid.appendChild(el("div", "exsec", "Up next"));
-  if (cur) {
-    const box = el("div", "excur"), head = el("button", "exb curhead"); head.type = "button"; head.dataset.ex = cur; head.setAttribute("aria-pressed", "true");
-    const n = todaySets(cur).length;
-    head.append(el("span", null, cur), el("small", null, n ? n + " set" + (n > 1 ? "s" : "") + " · set " + (n + 1) + " next" : "Set 1"));
-    head.onclick = e => e.preventDefault();
-    box.append(head, lc); grid.appendChild(box);
-  }
-  next.forEach(ex => grid.appendChild(row(ex, false)));
+  if (next.length) grid.appendChild(el("div", "exsec", "Up next"));
+  next.forEach(ex => grid.appendChild(item(ex)));
   const add = el("button", "exb add", "+ Add exercise"); add.type = "button"; add.onclick = () => openAdd(day); grid.appendChild(add);
   if (done.length) {
     grid.appendChild(el("div", "exsec", (isToday ? "Done today" : "Done on " + shortDate(date)) + " · " + done.length));
-    done.forEach(ex => grid.appendChild(row(ex, true)));
+    done.forEach(ex => grid.appendChild(item(ex)));
   }
 }
 // sets: chips; when `rerender` is given, chips are tappable and tapping one offers "Remove set"
@@ -453,7 +453,7 @@ function addCard(hd) {
 }
 function pickExercise(d, ex, last) {
   day = d; mem.set("day", day); renderDayBtns(); renderSelect();
-  $("ex").value = ex; mem.set("ex_" + day, ex);
+  $("ex").value = ex; mem.set("ex_" + day, ex); openInDone = todaySets(ex).length > 0;
   if (last) { $("w").value = trim(disp(last.w)); $("r").value = last.r; }
   setTab("training");
 }
@@ -1177,7 +1177,7 @@ let tourPending = false, tour = null;
 const TOUR = [
   { tab: "training", k: "Welcome 👋", t: "Quick tour?", p: "STEPS short steps, about a minute, showing every part of the app. You can replay it any time in Settings → Help.", btn: "Show me", skip: "Skip" },
   { tab: "training", sel: "#dayBtns", t: "Your workout days", p: "Pick today's workout day. You can rename days, add your own or switch to another plan any time in Settings." },
-  { tab: "training", sel: "#exGrid", t: "Your workout", p: "The exercise you're on sits at the top with its logger. Tap any exercise in Up next to switch; finished ones move to Done today. Hold and drag to reorder; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
+  { tab: "training", sel: "#exGrid", t: "Your workout", p: "Tap an exercise to open it and log sets; tap it again to close it. Exercises you've logged move to Done today. Hold and drag to reorder; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
   { tab: "training", sel: "#logCard .pair", t: "Weight and reps", p: "Set 1 is filled in from set 1 last time, so you can match or beat it. Set 2 copies the set you just did. Adjust with − and +." },
   { tab: "training", sel: "#save", t: "Save the set", p: "Tap Save set. A rest timer starts at the top. Tap it for +30s or Skip. Beat your best and you'll get a personal-best celebration 🏆" },
   { tab: "training", sel: "#todayBox", t: "Today so far", p: "Your sets for today appear here. Saved one by mistake? Tap it, then Remove set." },
@@ -1274,6 +1274,7 @@ const layerClosers = {
   plan: () => { if (planUI && planUI.mode === "change") { planUI = null; $("plan").hidden = true; document.body.classList.remove("menu-open", "planning"); } },
   add: () => reallyCloseAdd(),
   rk: () => reallyCloseRk(),
+  doc: () => { $("docFull").hidden = true; },
   del: () => { if (!deleting) { $("delFull").hidden = true; document.body.classList.remove("menu-open"); } },
   rkf: () => { if (rkFlow) { rkFlow = null; $("rkFull").hidden = true; document.body.classList.remove("menu-open"); } },
   date: () => { $("dpick").hidden = true; },
@@ -1295,7 +1296,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Top bar: menu button (☰) opens Settings; the date button (top right) picks the day you're logging; a chat button opens this coach. After saving a set, a rest timer appears at the top: tap it for +30s or Skip.
 - Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders).
 - Bottom tabs: Training, History, Progress, Group, Me.
-- Training tab: a list for the chosen day: the exercise you're on is at the top with its logger, then \"Up next\" (tap any to switch, any order), \"+ Add exercise\", and \"Done today\" for exercises with sets. Any number of sets per exercise. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
+- Training tab: a list for the chosen day: \"Up next\" (exercises not done yet), \"+ Add exercise\", and \"Done today\". Tap an exercise to open its logger in place, tap it again to close it. Any number of sets per exercise. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
 - Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
 - Add an exercise: "+ Add exercise" at the end of the exercise buttons (or in Settings → Workout days & exercises, open a day). It searches the built-in list of 130+ exercises grouped by muscle with equipment versions, shows the user's own exercises first with their last result, and lets them type any name as their own. It asks "Did you mean…?" if a typed name is almost the same as an existing one, so history stays together.
 - Rename or remove an exercise: Settings → Workout days & exercises (open the day) or the History tab. Renaming updates past sets everywhere; renaming onto an existing name offers to merge the two. Removing from a day can keep the history or delete it.
@@ -1606,7 +1607,7 @@ function setupDrag() {
   };
   grid.addEventListener("pointerdown", e => {
     dragJustEnded = false;
-    const b = e.target.closest(".exb[data-ex]"); if (!b || e.button > 0 || b.classList.contains("curhead")) return;
+    const b = e.target.closest(".exb[data-ex]"); if (!b || e.button > 0 || b.closest(".exitem.open")) return;
     const r = b.getBoundingClientRect();
     drag = { b, id: e.pointerId, sx: e.clientX, sy: e.clientY, gx: e.clientX - r.left, gy: e.clientY - r.top, active: false };
     drag.timer = setTimeout(() => {
@@ -1621,12 +1622,13 @@ function setupDrag() {
     if (!drag.active) { if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 10) { clearTimeout(drag.timer); drag = null; } return; }
     e.preventDefault();
     const over = [...grid.querySelectorAll(".exb[data-ex]")].find(x => {
-      if (x === drag.b || x.classList.contains("curhead") || x.classList.contains("done") !== drag.b.classList.contains("done")) return false; const q = x.getBoundingClientRect();
+      if (x === drag.b || x.closest(".exitem.open") || x.classList.contains("done") !== drag.b.classList.contains("done")) return false; const q = x.getBoundingClientRect();
       return e.clientX >= q.left && e.clientX <= q.right && e.clientY >= q.top && e.clientY <= q.bottom;
     });
     if (over) {
       const all = [...grid.querySelectorAll(".exb[data-ex]")];
-      if (all.indexOf(over) > all.indexOf(drag.b)) over.after(drag.b); else over.before(drag.b);
+      const N = x => x.closest(".exitem") || x;
+      if (all.indexOf(over) > all.indexOf(drag.b)) N(over).after(N(drag.b)); else N(over).before(N(drag.b));
     }
     place(e.clientX, e.clientY);
   });
@@ -2731,6 +2733,10 @@ function rkAfterSet(before) {
   rkSnapSave(R);
 }
 
+/* ---------- in-app pages (privacy policy): opened inside the app so Back returns to it ---------- */
+function openDoc(src, title) { $("docTitle").textContent = title; $("docFrame").title = title; if ($("docFrame").getAttribute("src") !== src) $("docFrame").src = src; $("docFull").hidden = false; pushLayer("doc"); }
+function closeDoc() { if ($("docFull").hidden) return; popLayer("doc"); $("docFull").hidden = true; }
+
 /* ---------- delete account (Play Store / App Store requirement) ---------- */
 let deleting = false;
 function openDelete() {
@@ -2897,6 +2903,8 @@ function wire() {
   document.querySelectorAll("[data-ip]").forEach(b => b.onclick = () => { prefs = { ...prefs, introPeriod: b.dataset.ip }; savePrefs(); renderSettings(); });
   document.querySelectorAll("[data-fig]").forEach(b => b.onclick = () => { prefs = { ...prefs, figure: b.dataset.fig }; savePrefs(); renderSettings(); if (tab === "body") renderMe(); gSchedule(false); });
   $("rkDim").onclick = closeRk; $("rkClose").onclick = closeRk;
+  $("privOpen").onclick = () => openDoc("privacy.html", "Privacy policy");
+  $("docBack").onclick = closeDoc;
   $("delAcc").onclick = () => { $("menuClose").click(); setTimeout(openDelete, 320); };
   $("intro").onclick = e => { if (e.target.closest(".iweek")) { stopIntroTimer(); return; } closeIntro(); };
   let sx = null, sy = null;
