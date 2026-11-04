@@ -339,7 +339,22 @@ textarea{width:100%;font:500 .95rem var(--body);padding:10px;border-radius:10px;
 .icon-btn:disabled{opacity:.35}
 
 /* ---- training: exercise buttons, pill timer, screen-on ---- */
-.exgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.exgrid{display:flex;flex-direction:column;gap:8px}
+.exsec{font:700 .72rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:4px 2px -2px}
+.excur{display:flex;flex-direction:column;border:2px solid var(--accent);border-radius:16px;background:var(--surface);overflow:hidden}
+.excur .curhead{border:0!important;border-radius:0;background:transparent!important;padding:14px 16px 0!important;min-height:0;flex-direction:row;align-items:baseline;justify-content:space-between;cursor:default}
+.excur .curhead span{font:700 1.15rem var(--body)}.excur .curhead small{white-space:nowrap}
+.excur #logCard{border:0;border-radius:0;background:transparent;padding-top:10px}.excur #logCard .cardhead{display:none}
+#filledNote{display:none!important}
+#logCard #todayBox{display:flex;flex-wrap:wrap;align-items:center;gap:6px}#logCard #todayBox[hidden]{display:none}#logCard #todayBox .lbl{margin:0}
+#logCard .linkbtn{align-self:center}
+.exrow{flex-direction:row!important;align-items:center;justify-content:flex-start!important;gap:12px!important;min-height:56px!important;padding:10px 14px!important}
+.exmark{width:28px;height:28px;border-radius:50%;flex-shrink:0;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font:700 .85rem var(--num);color:var(--ok);box-sizing:border-box}
+.exrow.done .exmark{border:0;background:color-mix(in srgb,var(--ok) 20%,transparent)}
+.extxt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.extxt > span{font-weight:600}
+.exgo{color:var(--muted);font:600 .8rem var(--num);flex-shrink:0}.exrow.done .exgo{color:var(--ok)}
+.exrow.done{opacity:.85}.exdone{color:var(--ok)!important;font-weight:600}
+.exb.add{min-height:48px!important;align-items:center;text-align:center}
 .exb{display:flex;flex-direction:column;justify-content:space-between;gap:4px;min-height:60px;text-align:left;padding:10px 11px;border-radius:12px;
   border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .92rem/1.2 var(--body);cursor:pointer;min-width:0;overflow-wrap:anywhere}
 .exb small{font:500 .75rem var(--num);color:var(--muted)}
@@ -711,6 +726,17 @@ body.touring .chatbub{z-index:19}
 .rknews{border-color:color-mix(in srgb,var(--tc) 60%,var(--line));background:color-mix(in srgb,var(--tc) 12%,var(--surface))}
 .gcrew{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;background:#121518;border-radius:12px;padding:8px 4px}
 .gcm{display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;color:#eef1f4}.gcm svg{height:130px;width:auto}.gcm b{font-size:.82rem}.gcm small{font-size:.65rem;color:#8a95a1}
+/* delete account + AI reports */
+.acclink{display:block;text-align:center;text-decoration:none;font-size:.95rem}
+.delacc{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.delicon{font-size:2.6rem;text-align:center;margin-top:12px}
+.dellist{margin:0;padding-left:20px;line-height:1.7}
+.delin{font:700 1.1rem var(--num);letter-spacing:.2em;text-transform:uppercase;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;box-sizing:border-box}
+.delgo{background:var(--danger)!important;color:#fff!important}
+.delgo:disabled{opacity:.4}
+.chatact{display:flex;gap:14px;margin:-2px 0 4px 4px}.chatact button{background:none;border:0;color:var(--muted);font:600 .8rem var(--body);cursor:pointer;padding:2px 0}
+.chatrep{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--accent);border-radius:14px;padding:12px;margin:0 0 6px}
+.chatrep label{display:flex;gap:10px;align-items:center;font-size:.95rem}.chatrep input{accent-color:var(--accent);width:18px;height:18px}
 </style>
 </head>
 <body>
@@ -803,13 +829,14 @@ body.touring .chatbub{z-index:19}
           <div class="stepper"><button type="button" data-step="r" data-dir="-1" aria-label="Fewer reps">−</button>
             <input id="r" inputmode="numeric" value="8"><button type="button" data-step="r" data-dir="1" aria-label="More reps">+</button></div></div>
       </div>
-      <div><label class="lbl" for="note">Note (optional)</label><input type="text" id="note" placeholder="e.g. seat 5, drop set"></div>
+      <div id="noteRow" hidden><label class="lbl" for="note">Note (optional)</label><input type="text" id="note" placeholder="e.g. seat 5, drop set"></div>
       <span class="small" id="filledNote" hidden></span>
       <button class="save" id="save">Save set</button>
-    </div>
-    <div id="todayBox" hidden>
-      <span class="lbl">Today so far</span>
-      <div class="chips" id="todayChips"></div>
+      <div id="todayBox" hidden>
+        <span class="lbl">Today so far</span>
+        <div class="chips" id="todayChips"></div>
+      </div>
+      <button type="button" class="linkbtn" id="noteOpen">✎ Add a note</button>
     </div>
   </section>
 
@@ -897,6 +924,9 @@ body.touring .chatbub{z-index:19}
   </div>
   <div class="plan" id="rkFull" hidden role="dialog" aria-modal="true" aria-label="Your muscle map">
     <div class="planpanel"><div class="planbody" id="rkFullBody"></div></div>
+  </div>
+  <div class="plan" id="delFull" hidden role="dialog" aria-modal="true" aria-labelledby="delTitle">
+    <div class="planpanel"><div class="planbody" id="delBody"></div></div>
   </div>
   <div class="intro" id="intro" hidden role="dialog" aria-modal="true" aria-label="Your week so far. Tap to start">
     <div class="introbody" id="introBody"></div>
@@ -1020,6 +1050,8 @@ body.touring .chatbub{z-index:19}
           </div>
           <span id="who" class="small"></span>
           <button class="ghost danger-ghost" id="signout">Sign out</button>
+          <a class="ghost acclink" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+          <button class="ghost acclink delacc" id="delAcc">Delete account</button>
         </div>
       </details>
     </aside>

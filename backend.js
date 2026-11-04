@@ -60,6 +60,17 @@ export async function firebaseBackend(config, appCheckKey) {
     },
     deletePlan(code) { return F.deleteDoc(F.doc(db, "plans", code)); },
     del(uid, id) { return F.deleteDoc(F.doc(col(uid), id)); },
+    // account deletion: prove it's you (if needed), then remove the sign-in itself
+    provider() { const u = auth.currentUser; if (!u) return null; if (u.isAnonymous) return "guest"; return u.providerData.some(p => p.providerId === "google.com") ? "google" : "password"; },
+    async reauth(pw) {
+      const u = auth.currentUser, p = this.provider();
+      if (p === "google") await A.reauthenticateWithPopup(u, provider);
+      else if (p === "password") await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, pw));
+    },
+    async listDocs(uid) { const s = await F.getDocs(col(uid)); return s.docs.map(d => d.id); },
+    deleteUser() { return A.deleteUser(auth.currentUser); },
+    // report an AI coach answer (write-only for users; you read them in the Firebase console)
+    report(data) { return F.addDoc(F.collection(db, "reports"), { ...data, at: F.serverTimestamp() }); },
     // friends groups: groups/{gid} (members, votes), groups/{gid}/bests/{uid} (each member's best sets),
     // groupCodes/{CODE} -> gid (so a code can be changed without moving the group)
     async groupByCode(code) {
@@ -142,6 +153,11 @@ export function mockBackend() {
     subscribe(uid, cb) { dataCbs.push(cb); setTimeout(() => cb(JSON.parse(JSON.stringify(st.docs)), false), 30); return () => {}; },
     async set(uid, id, data) { st.docs[id] = JSON.parse(JSON.stringify(data)); save(); },
     async del(uid, id) { delete st.docs[id]; save(); },
+    provider() { return st.user ? (st.user.guest ? "guest" : (st.accounts || {})[st.user.email] ? "password" : "google") : null; },
+    async reauth(pw) { const a = (st.accounts || {})[st.user.email]; if (a && a.pw !== pw) throw err("auth/wrong-password"); },
+    async listDocs() { return Object.keys(st.docs); },
+    async deleteUser() { if (st.accounts && st.user && st.user.email) delete st.accounts[st.user.email]; st.user = null; save(); userCbs.forEach(f => f(null)); },
+    async report(data) { const r = JSON.parse(localStorage.getItem("gymlog_reports") || "[]"); r.push(data); localStorage.setItem("gymlog_reports", JSON.stringify(r)); },
     // friends groups (shared between every test user, like plans)
     ...(() => {
       const G = () => JSON.parse(localStorage.getItem("gymlog_groups") || '{"groups":{},"codes":{},"bests":{}}');

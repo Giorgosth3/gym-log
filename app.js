@@ -92,6 +92,7 @@ function renderSelect() {
 function renderExercise(prefill) {
   renderExGrid(); renderHint(); renderToday();
   const ex = $("ex").value; $("logCard").hidden = !ex; $("exTitle").textContent = ex;
+  $("noteRow").hidden = !$("note").value && !noteOpen; $("noteOpen").hidden = !$("noteRow").hidden;
   const done = todaySets(ex).length; $("setNo").textContent = ex ? "Set " + (done + 1) : "";
   if (prefill) prefillSet();
 }
@@ -116,25 +117,48 @@ function prefillSet() {
     note.textContent = "Filled in from set 1 last time (" + shortDate(last.date) + "). Adjust if needed."; note.hidden = false;
   }
 }
+let noteOpen = false;
 function pickEx(ex) {
+  if ($("ex").value !== ex) noteOpen = false;
   $("ex").value = ex; mem.set("ex_" + day, ex); renderExercise(true);
   // bring the logging card (with Save) into view
-  $("logCard").scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  const tgt = $("exGrid").querySelector(".excur") || $("logCard"), hdr = Math.max(...[...document.querySelectorAll(".topbar, #dayBtns")].map(x => x.getBoundingClientRect().bottom), 0);
+  const y = tgt.getBoundingClientRect().top + scrollY - hdr - 10;
+  if (Math.abs(y - scrollY) > 4) window.scrollTo({ top: Math.max(0, y), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
+// Training list: the exercise you're on (with its logger) on top, then "Up next", then "Done today"
 function renderExGrid() {
-  const grid = $("exGrid"), cur = $("ex").value; grid.innerHTML = "";
-  namesFor(day).forEach(ex => {
-    const b = el("button", "exb"), n = todaySets(ex).length, last = n ? null : lastSession(ex);
-    b.type = "button"; b.dataset.ex = ex; b.setAttribute("aria-pressed", String(ex === cur));
-    if (n) b.classList.add("done");
-    const sub = n ? "✓ " + n + " set" + (n > 1 ? "s" : "") : last ? "Last: " + fmtW(last.sets[0].w) + " × " + last.sets[0].r : "Not done yet";
-    b.append(el("span", null, ex), el("small", null, sub));
+  const grid = $("exGrid"), cur = $("ex").value, date = $("date").value, isToday = date === todayISO();
+  const lc = $("logCard"), pane = $("pane-training");
+  if (grid.contains(lc)) pane.appendChild(lc);
+  grid.innerHTML = "";
+  const names = namesFor(day), done = names.filter(ex => ex !== cur && todaySets(ex).length), next = names.filter(ex => ex !== cur && !todaySets(ex).length);
+  const lastLine = ex => { const l = lastSession(ex); return l ? "Last: " + fmtW(l.sets[0].w) + " × " + l.sets[0].r + " · " + l.sets.length + " set" + (l.sets.length > 1 ? "s" : "") : "Not done yet"; };
+  const row = (ex, isDone) => {
+    const b = el("button", "exb exrow" + (isDone ? " done" : "")); b.type = "button"; b.dataset.ex = ex; b.setAttribute("aria-pressed", "false");
+    const n = todaySets(ex), mark = el("span", "exmark", isDone ? "✓" : ""), txt = el("span", "extxt");
+    txt.appendChild(el("span", null, ex));
+    if (isDone) { const ch = el("small", "exdone"); ch.textContent = n.map(x => trim(disp(x.w)) + "×" + x.r).slice(0, 3).join("  ") + (n.length > 3 ? "  +" + (n.length - 3) : ""); txt.appendChild(ch); }
+    else txt.appendChild(el("small", null, lastLine(ex)));
+    b.append(mark, txt, el("span", "exgo", isDone ? n.length + " set" + (n.length > 1 ? "s" : "") : "›"));
+    b.setAttribute("aria-label", ex + (isDone ? ", " + n.length + " set" + (n.length > 1 ? "s" : "") + " done" : ", " + lastLine(ex)));
     b.onclick = () => { if (dragJustEnded) { dragJustEnded = false; return; } pickEx(ex); };
-    grid.appendChild(b);
-  });
-  const add = el("button", "exb add", "+ Add exercise"); add.type = "button";
-  add.onclick = () => openAdd(day);
-  grid.appendChild(add);
+    return b;
+  };
+  if (cur || next.length) grid.appendChild(el("div", "exsec", "Up next"));
+  if (cur) {
+    const box = el("div", "excur"), head = el("button", "exb curhead"); head.type = "button"; head.dataset.ex = cur; head.setAttribute("aria-pressed", "true");
+    const n = todaySets(cur).length;
+    head.append(el("span", null, cur), el("small", null, n ? n + " set" + (n > 1 ? "s" : "") + " · set " + (n + 1) + " next" : "Set 1"));
+    head.onclick = e => e.preventDefault();
+    box.append(head, lc); grid.appendChild(box);
+  }
+  next.forEach(ex => grid.appendChild(row(ex, false)));
+  const add = el("button", "exb add", "+ Add exercise"); add.type = "button"; add.onclick = () => openAdd(day); grid.appendChild(add);
+  if (done.length) {
+    grid.appendChild(el("div", "exsec", (isToday ? "Done today" : "Done on " + shortDate(date)) + " · " + done.length));
+    done.forEach(ex => grid.appendChild(row(ex, true)));
+  }
 }
 // sets: chips; when `rerender` is given, chips are tappable and tapping one offers "Remove set"
 function chipsInto(box, sets, rerender) {
@@ -205,7 +229,7 @@ function saveSet() {
   // PB: heavier than ever, or more reps at your heaviest weight
   const isPB = !!prevBest && (w > prevBest.w || (w === prevBest.w && r > prevBest.r));
   toast((isPB ? "New personal best! " : "Saved: ") + ex + " set " + n + " — " + fmtW(w) + " × " + r + offlineNote());
-  $("note").value = "";
+  $("note").value = ""; noteOpen = false;
   renderExercise(true);
   if (prefs.restOn) startRest(prefs.restSec);
   // big moments only
@@ -1153,7 +1177,7 @@ let tourPending = false, tour = null;
 const TOUR = [
   { tab: "training", k: "Welcome 👋", t: "Quick tour?", p: "STEPS short steps, about a minute, showing every part of the app. You can replay it any time in Settings → Help.", btn: "Show me", skip: "Skip" },
   { tab: "training", sel: "#dayBtns", t: "Your workout days", p: "Pick today's workout day. You can rename days, add your own or switch to another plan any time in Settings." },
-  { tab: "training", sel: "#exGrid", t: "Pick an exercise", p: "Tap the exercise you're doing. \"Last\" shows set 1 from last time. Hold and drag to reorder; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
+  { tab: "training", sel: "#exGrid", t: "Your workout", p: "The exercise you're on sits at the top with its logger. Tap any exercise in Up next to switch; finished ones move to Done today. Hold and drag to reorder; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
   { tab: "training", sel: "#logCard .pair", t: "Weight and reps", p: "Set 1 is filled in from set 1 last time, so you can match or beat it. Set 2 copies the set you just did. Adjust with − and +." },
   { tab: "training", sel: "#save", t: "Save the set", p: "Tap Save set. A rest timer starts at the top. Tap it for +30s or Skip. Beat your best and you'll get a personal-best celebration 🏆" },
   { tab: "training", sel: "#todayBox", t: "Today so far", p: "Your sets for today appear here. Saved one by mistake? Tap it, then Remove set." },
@@ -1250,6 +1274,7 @@ const layerClosers = {
   plan: () => { if (planUI && planUI.mode === "change") { planUI = null; $("plan").hidden = true; document.body.classList.remove("menu-open", "planning"); } },
   add: () => reallyCloseAdd(),
   rk: () => reallyCloseRk(),
+  del: () => { if (!deleting) { $("delFull").hidden = true; document.body.classList.remove("menu-open"); } },
   rkf: () => { if (rkFlow) { rkFlow = null; $("rkFull").hidden = true; document.body.classList.remove("menu-open"); } },
   date: () => { $("dpick").hidden = true; },
   grp: () => { if (typeof gUI !== "undefined" && !["group", "home"].includes(gUI.view)) { gUI.view = "group"; gOpenVote = null; gProposing = false; if (tab === "group") renderGroup(); } }
@@ -1270,7 +1295,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Top bar: menu button (☰) opens Settings; the date button (top right) picks the day you're logging; a chat button opens this coach. After saving a set, a rest timer appears at the top: tap it for +30s or Skip.
 - Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders).
 - Bottom tabs: Training, History, Progress, Group, Me.
-- Training tab: exercise buttons for the chosen day. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
+- Training tab: a list for the chosen day: the exercise you're on is at the top with its logger, then \"Up next\" (tap any to switch, any order), \"+ Add exercise\", and \"Done today\" for exercises with sets. Any number of sets per exercise. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
 - Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
 - Add an exercise: "+ Add exercise" at the end of the exercise buttons (or in Settings → Workout days & exercises, open a day). It searches the built-in list of 130+ exercises grouped by muscle with equipment versions, shows the user's own exercises first with their last result, and lets them type any name as their own. It asks "Did you mean…?" if a typed name is almost the same as an existing one, so history stays together.
 - Rename or remove an exercise: Settings → Workout days & exercises (open the day) or the History tab. Renaming updates past sets everywhere; renaming onto an existing name offers to merge the two. Removing from a day can keep the history or delete it.
@@ -1299,7 +1324,7 @@ ${APP_GUIDE}
 This user's workout days and exercises:
 ${plan}`;
 }
-let chatMsgs = [], chatBusy = false, chatReturn = null;
+let chatMsgs = [], chatBusy = false, chatReturn = null, chatReport = null;
 const chatKey = () => "chatCount_" + todayISO();
 function chatLeft() { return CHAT_DAILY - (parseInt(mem.get(chatKey()) || "0", 10) || 0); }
 function esc(t) { return t.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -1339,9 +1364,29 @@ function renderChat() {
     });
     intro.appendChild(sug); box.appendChild(intro);
   }
-  chatMsgs.forEach(m => box.appendChild(chatBubble(m.role === "user" ? "me" : "ai", m.role === "user" ? "<p>" + esc(m.text).replace(/\n/g, "<br>") + "</p>" : mdLite(m.text) + (m.err ? "" : ""))));
+  chatMsgs.forEach((m, i) => {
+    box.appendChild(chatBubble(m.role === "user" ? "me" : "ai", m.role === "user" ? "<p>" + esc(m.text).replace(/\n/g, "<br>") + "</p>" : mdLite(m.text)));
+    if (m.role === "user" || m.err || !m.text || (chatBusy && i === chatMsgs.length - 1)) return;
+    // report an AI answer (store requirement for AI-generated content)
+    const act = el("div", "chatact");
+    if (m.reported) act.appendChild(el("span", "small", "🚩 Reported. Thanks"));
+    else { const r = el("button", null, "🚩 Report"); r.type = "button"; r.onclick = () => { chatReport = chatReport === i ? null : i; renderChat(); }; act.appendChild(r); }
+    box.appendChild(act);
+    if (chatReport === i && !m.reported) {
+      const f = el("div", "chatrep"); f.appendChild(el("b", null, "What's wrong with this answer?"));
+      ["Wrong or unsafe advice", "Offensive or inappropriate", "Something else"].forEach((t, k) => { const l = el("label"), r = el("input"); r.type = "radio"; r.name = "rep"; r.value = t; if (!k) r.checked = true; l.append(r, document.createTextNode(t)); f.appendChild(l); });
+      const send = el("button", "use primary", "Send report"); send.type = "button";
+      send.onclick = async () => {
+        const reason = (f.querySelector("input:checked") || {}).value || "Something else", q = (chatMsgs.slice(0, i).reverse().find(x => x.role === "user") || {}).text || "";
+        send.disabled = true;
+        try { await be.report({ uid, reason, question: q.slice(0, 1000), answer: m.text.slice(0, 6000) }); m.reported = true; chatReport = null; renderChat(); toast("Thanks. The answer was reported."); }
+        catch (e) { send.disabled = false; toast("Couldn't send the report. Check your connection.", true); }
+      };
+      f.appendChild(send); box.appendChild(f);
+    }
+  });
   const left = chatLeft();
-  $("chatNote").textContent = left <= 5 ? (left > 0 ? left + " question" + (left === 1 ? "" : "s") + " left today." : "You've reached today's limit. Back tomorrow!") : "AI answers can be wrong. For pain or injuries, see a professional.";
+  $("chatNote").textContent = left <= 5 ? (left > 0 ? left + " question" + (left === 1 ? "" : "s") + " left today." : "You've reached today's limit. Back tomorrow!") : "AI answers can be wrong and aren't medical advice. For pain or injuries, see a professional.";
   $("chatSend").disabled = chatBusy || left <= 0; $("chatNew").hidden = !chatMsgs.length;
   box.scrollTop = box.scrollHeight;
 }
@@ -1546,8 +1591,8 @@ function setupDrag() {
     if (!d.active) return;
     d.b.classList.remove("lifted"); d.b.style.transform = "";
     dragJustEnded = true; // swallows the click that follows the drop
-    const order = [...grid.querySelectorAll(".exb[data-ex]")].map(x => x.dataset.ex);
-    const before = exercisesFor(day);
+    const before = exercisesFor(day), order = [...grid.querySelectorAll(".exb[data-ex]")].map(x => x.dataset.ex).filter(x => before.includes(x));
+    before.forEach((x, i) => { if (!order.includes(x)) order.splice(Math.min(i, order.length), 0, x); });
     if (commit && order.join("\n") !== before.join("\n") && order.length === before.length) {
       lists = { ...lists, [day]: order }; saveLists(); toast("Order saved." + offlineNote());
       if (tab === "history") renderHistory();
@@ -1561,7 +1606,7 @@ function setupDrag() {
   };
   grid.addEventListener("pointerdown", e => {
     dragJustEnded = false;
-    const b = e.target.closest(".exb[data-ex]"); if (!b || e.button > 0) return;
+    const b = e.target.closest(".exb[data-ex]"); if (!b || e.button > 0 || b.classList.contains("curhead")) return;
     const r = b.getBoundingClientRect();
     drag = { b, id: e.pointerId, sx: e.clientX, sy: e.clientY, gx: e.clientX - r.left, gy: e.clientY - r.top, active: false };
     drag.timer = setTimeout(() => {
@@ -1576,7 +1621,7 @@ function setupDrag() {
     if (!drag.active) { if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 10) { clearTimeout(drag.timer); drag = null; } return; }
     e.preventDefault();
     const over = [...grid.querySelectorAll(".exb[data-ex]")].find(x => {
-      if (x === drag.b) return false; const q = x.getBoundingClientRect();
+      if (x === drag.b || x.classList.contains("curhead") || x.classList.contains("done") !== drag.b.classList.contains("done")) return false; const q = x.getBoundingClientRect();
       return e.clientX >= q.left && e.clientX <= q.right && e.clientY >= q.top && e.clientY <= q.bottom;
     });
     if (over) {
@@ -1712,17 +1757,19 @@ function saveThemeEdit() {
 
 /* ---------- writes (local first; Firestore syncs in the background) ---------- */
 function writeSession(date, data) {
+  if (deleting) return;
   const p = data.sets.length ? be.set(uid, "s_" + date, data) : be.del(uid, "s_" + date);
   p.catch(e => toast("Couldn't save to your account: " + (e && e.message || "try again"), true));
   return p;
 }
 function saveLists() {
+  if (deleting) return;
   const out = { full: true, v: 2, days, lists: {} };
   days.forEach(d => { out.lists[d] = lists[d] || []; });
   const p = be.set(uid, "exercises", out); p.catch(() => toast("Couldn't save your exercise list.", true)); return p;
 }
-function savePrefs() { const p = be.set(uid, "prefs", prefs); p.catch(() => toast("Couldn't save your settings.", true)); return p; }
-function saveBody() { const p = be.set(uid, "body", body); p.catch(() => toast("Couldn't save your weigh-in.", true)); return p; }
+function savePrefs() { if (deleting) return Promise.resolve(); const p = be.set(uid, "prefs", prefs); p.catch(() => toast("Couldn't save your settings.", true)); return p; }
+function saveBody() { if (deleting) return Promise.resolve(); const p = be.set(uid, "body", body); p.catch(() => toast("Couldn't save your weigh-in.", true)); return p; }
 
 function removeSetByT(date, t) {
   const s = sessions[date]; if (!s) return;
@@ -1879,6 +1926,7 @@ async function importExcel(file) {
 
 /* ---------- data from the backend ---------- */
 function applyDocs(docs) {
+  if (deleting) return;
   const next = {};
   Object.entries(docs).forEach(([id, v]) => {
     if (!v) return;
@@ -2683,6 +2731,64 @@ function rkAfterSet(before) {
   rkSnapSave(R);
 }
 
+/* ---------- delete account (Play Store / App Store requirement) ---------- */
+let deleting = false;
+function openDelete() {
+  const prov = be.provider ? be.provider() : "password";
+  $("delFull").hidden = false; document.body.classList.add("menu-open"); pushLayer("del");
+  const b = $("delBody"); b.innerHTML = "";
+  const t = el("h2", "rkh", "Delete your account?"); t.id = "delTitle"; t.style.textAlign = "center";
+  b.append(el("div", "delicon", "⚠️"), t);
+  const c = el("div", "card"); c.appendChild(el("b", null, "This permanently deletes:"));
+  const ul = el("ul", "dellist"); ["every set and workout you've logged", "your workout days, exercises and settings", "your body weight and goal", "your shared plan code", "your place, best sets and ranks in your groups", "your sign-in"].forEach(x => ul.appendChild(el("li", null, x)));
+  c.appendChild(ul); c.appendChild(el("p", "small", "It can't be undone.")); b.appendChild(c);
+  const dl = el("button", "linkbtn", "Want a copy first? Download my data (Excel) ›"); dl.type = "button"; dl.onclick = () => exportExcel(); b.appendChild(dl);
+  let pw = null;
+  if (prov === "password") { b.appendChild(el("label", "lbl", "Your password")); pw = el("input", "delin"); pw.type = "password"; pw.autocomplete = "current-password"; pw.style.letterSpacing = "normal"; pw.style.textTransform = "none"; b.appendChild(pw); }
+  if (prov === "google") b.appendChild(el("p", "small", "You'll be asked to confirm with Google first."));
+  const l = el("label", "lbl", "Type DELETE to confirm"); l.htmlFor = "delIn"; b.appendChild(l);
+  const inp = el("input", "delin"); inp.id = "delIn"; inp.autocomplete = "off"; inp.autocapitalize = "characters"; b.appendChild(inp);
+  const msg = el("p", "small gmsg"); b.appendChild(msg);
+  const go = el("button", "save delgo", "Delete my account forever"); go.type = "button"; go.disabled = true;
+  inp.oninput = () => { go.disabled = inp.value.trim().toUpperCase() !== "DELETE"; };
+  go.onclick = () => busy(go, async () => {
+    msg.textContent = "";
+    if (!navigator.onLine) { msg.textContent = "You're offline. Connect to the internet to delete your account."; return; }
+    if (pw && !pw.value) { msg.textContent = "Enter your password."; pw.focus(); return; }
+    try { if (prov !== "guest" && be.reauth) await be.reauth(pw ? pw.value : ""); }
+    catch (e) { const c2 = e && e.code || ""; msg.textContent = /wrong-password|invalid-credential/.test(c2) ? "That password isn't right." : /popup-closed|cancelled/.test(c2) ? "Confirm with Google to continue." : "Couldn't confirm it's you. Try again."; return; }
+    go.textContent = "Deleting…";
+    try { await deleteEverything(); }
+    catch (e) { msg.textContent = "Something went wrong while deleting. Try again; anything already deleted stays deleted."; go.textContent = "Delete my account forever"; return; }
+  });
+  const no = el("button", "ghost", "Cancel"); no.type = "button"; no.onclick = closeDelete;
+  b.append(go, no);
+}
+function closeDelete() { if ($("delFull").hidden) return; popLayer("del"); $("delFull").hidden = true; document.body.classList.remove("menu-open"); }
+async function deleteEverything() {
+  deleting = true; clearTimeout(gSyncTimer);
+  if (unsub) { unsub(); unsub = null; }
+  const me2 = uid;
+  for (const gid of myGroups()) {
+    try {
+      const g = await be.getGroup(gid); if (!g || !(g.memberIds || []).includes(me2)) continue;
+      await be.delBests(gid, me2).catch(() => {});
+      let empty = false;
+      await be.mutateGroup(gid, d => { d.memberIds = (d.memberIds || []).filter(x => x !== me2); if (d.members) delete d.members[me2]; if (!d.memberIds.length) { empty = true; return null; } if (d.leader === me2) d.leader = gOrder(d)[0]; return d; });
+      if (empty) await be.deleteGroup(gid, g.code);
+    } catch (e) {}
+  }
+  if (prefs.planCode) { try { const p = await be.getPlan(prefs.planCode); if (p && p.owner === me2) await be.deletePlan(prefs.planCode); } catch (e) {} }
+  const ids = be.listDocs ? await be.listDocs(me2) : ["exercises", "prefs", "body", ...Object.keys(sessions).map(d => "s_" + d)];
+  for (const id of ids) await be.del(me2, id);
+  ["gSeen_", "rkSeen_"].forEach(k => mem.set(k + me2, ""));
+  groups = {}; sessions = {}; days = []; lists = {}; prefs = { ...DEFAULT_PREFS }; body = { entries: {} };
+  await be.deleteUser();
+  deleting = false; $("delFull").hidden = true; document.body.classList.remove("menu-open");
+  try { if (history.state && history.state.layer === "del") history.back(); } catch (e) {}
+  toast("Your account and all its data were deleted.");
+}
+
 /* ---------- date picker (the app's own, so future days are greyed out on every phone) ---------- */
 let dpMonth = null;
 function openDatePick() {
@@ -2726,6 +2832,7 @@ function renderDatePick() {
 /* ---------- wiring ---------- */
 function wire() {
   $("date").value = todayISO(); $("date").max = todayISO();
+  $("noteOpen").onclick = () => { noteOpen = true; $("noteRow").hidden = false; $("noteOpen").hidden = true; $("note").focus(); };
   // no logging ahead: the calendar stops at today (and today moves on if the app stays open past midnight)
   const keepMax = () => { $("date").max = todayISO(); if ($("date").value > todayISO()) { $("date").value = todayISO(); renderDateLbl(); renderUnits(); renderPane(); } };
   document.addEventListener("visibilitychange", () => { if (!document.hidden) keepMax(); });
@@ -2790,6 +2897,7 @@ function wire() {
   document.querySelectorAll("[data-ip]").forEach(b => b.onclick = () => { prefs = { ...prefs, introPeriod: b.dataset.ip }; savePrefs(); renderSettings(); });
   document.querySelectorAll("[data-fig]").forEach(b => b.onclick = () => { prefs = { ...prefs, figure: b.dataset.fig }; savePrefs(); renderSettings(); if (tab === "body") renderMe(); gSchedule(false); });
   $("rkDim").onclick = closeRk; $("rkClose").onclick = closeRk;
+  $("delAcc").onclick = () => { $("menuClose").click(); setTimeout(openDelete, 320); };
   $("intro").onclick = e => { if (e.target.closest(".iweek")) { stopIntroTimer(); return; } closeIntro(); };
   let sx = null, sy = null;
   $("intro").addEventListener("touchstart", e => { const c = e.target.closest(".iweek"); sx = c ? e.touches[0].clientX : null; sy = c ? e.touches[0].clientY : null; }, { passive: true });
