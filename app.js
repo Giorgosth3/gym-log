@@ -669,6 +669,9 @@ function renderProgress() {
   if (!all.length) box.appendChild(el("p", "small center", "Your numbers fill in here as you log sets in Training."));
 }
 let wkSel = null;
+// the day bubble closes when you tap anywhere else
+function hideWkBub() { wkSel = null; document.querySelectorAll(".wkbub").forEach(x => x.remove()); document.querySelectorAll(".wkdays .sel").forEach(x => x.classList.remove("sel")); document.querySelectorAll(".wkdays.bubbled").forEach(x => x.classList.remove("bubbled")); }
+document.addEventListener("pointerdown", e => { if (wkSel && !e.target.closest(".wkdays button")) hideWkBub(); }, true);
 // this week against the weekly target: a ring, the 7 days
 function weekCard(st) {
   const T = st.T, n = st.thisCount, c = el("div", "card wkcard");
