@@ -1326,7 +1326,7 @@ const TOUR = [
   { tab: "progress", sel: "#progBody .wkcard", t: "Progress", p: "Your week, month or year at a glance: workouts, sets, kg lifted and personal bests. The ring shows this week against your target, then your most improved and stalled exercises and a calendar of training days." },
   { tab: "group", sel: "#grp", t: "Group", p: "Make a private group with friends from your gym, vote in the exercises you all do, and see who lifts the heaviest. Your Training sets count automatically." },
   { tab: "body", sel: "#meTop .rkmapcard", t: "Me: your muscle ranks", p: "Every muscle earns a rank, from Bronze to Diamond, by training it and beating your records. Tap ? to see how it works. Your weigh-ins and goal weight are further down." },
-  { tab: "training", sel: "#chatBub", round: true, t: "Ask the coach", p: "Tap HELP to ask how to use the app or how to do an exercise. Press and hold it to move it out of the way." },
+  { tab: "training", sel: "#chatBub", round: true, t: "Ask the coach", p: "Tap HELP to ask the AI coach about training, food, sleep, motivation or how to use the app. Press and hold it to move it out of the way." },
   { tab: "training", sel: "#menuOpen", t: "Settings", p: "Your days & exercises, change plan, plan codes to share, units, rest timer, weekly target, colours, account and Excel export. This tour is in there too." },
   { tab: "training", k: "All set ✅", t: "Go lift!", p: "Log your first set and start your streak. Tap HELP if you get stuck.", btn: "Start", skip: "" }
 ];
@@ -1455,11 +1455,16 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Install: iPhone Safari → Share → Add to Home Screen. Android Chrome → ⋮ → Add to Home screen / Install app.`;
 function coachSystem() {
   const plan = days.map(d => d + ": " + (exercisesFor(d).join(", ") || "no exercises yet")).join("\n");
-  return `You are the coach inside "Gym Log", a phone app for logging gym sets. Answer only:
-1) questions about using the Gym Log app, and
-2) exercise and training questions: how to do an exercise with good form, sets, reps, progression, warm-ups, rest, training splits, general gym nutrition basics.
-If a question is about anything else, say kindly that you can only help with the app and training.
-Rules: be short and practical (usually under 120 words), use numbered steps for how-to answers, use the user's language (reply in Greek if they write in Greek or Greeklish). Use kg unless they use lbs (their setting: ${U()}). Do not diagnose injuries or give medical advice; for pain, injuries or health conditions tell them to stop and see a doctor or physiotherapist. Never claim the app can do something not described below.
+  return `You are the friendly coach inside "Gym Log", a phone app for logging gym sets. Help with anything about health and fitness:
+1) using the Gym Log app;
+2) training: exercise form, sets, reps, progression, warm-ups, rest, training splits, programs, cardio, running and other sports, stretching and mobility;
+3) food: nutrition, protein, meal and snack ideas, losing fat or gaining muscle, hydration;
+4) recovery and lifestyle: sleep, soreness, rest days, stress and energy as they relate to training;
+5) mindset: motivation, gym anxiety, building a habit, getting back after a break;
+6) supplements: general facts about common ones (creatine, protein powder, caffeine) — no medical dosing.
+Answer these fully and helpfully, even if the question is loosely related to health or fitness.
+If a question has nothing to do with health or fitness, don't lecture: reply in one or two warm sentences, vary the wording, maybe add a light touch, and suggest something related you could help with (for example a workout, a meal idea or how to use the app). Never repeat the same refusal sentence word for word.
+Rules: be short and practical (usually under 120 words), use numbered steps for how-to answers, use the user's language (reply in Greek if they write in Greek or Greeklish). Use kg unless they use lbs (their setting: ${U()}). Do not diagnose injuries or give medical advice; for pain, injuries, health conditions, medication, pregnancy or eating-disorder concerns, be kind and tell them to see a doctor, physiotherapist or dietitian. No extreme diets or very low calorie targets. Never claim the app can do something not described below.
 
 ${APP_GUIDE}
 
@@ -1498,10 +1503,10 @@ function renderChat() {
   const box = $("chatMsgs"); box.innerHTML = "";
   if (!chatMsgs.length) {
     const intro = el("div", "chatintro");
-    intro.appendChild(chatBubble("ai", "<p>Hi! Ask me how to use the app, how to do an exercise properly, or anything about training.</p>"));
+    intro.appendChild(chatBubble("ai", "<p>Hi! Ask me anything about training, food, sleep and recovery, motivation, or how to use the app.</p>"));
     const sug = el("div", "chatsug");
     const ex = exercisesFor(day)[0];
-    [ex ? "How do I do " + ex + " with good form?" : "How do I do a chest press with good form?", "How do I change the order of my exercises?", "When should I increase the weight?"].forEach(q => {
+    [ex ? "How do I do " + ex + " with good form?" : "How do I do a chest press with good form?", "How much protein do I need?", "When should I increase the weight?"].forEach(q => {
       const b = el("button", "chip", q); b.type = "button"; b.onclick = () => sendChat(q); sug.appendChild(b);
     });
     intro.appendChild(sug); box.appendChild(intro);
