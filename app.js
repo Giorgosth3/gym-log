@@ -478,7 +478,8 @@ function renderHistory() {
     const row = el("button", "hrow"); row.type = "button"; row.setAttribute("aria-expanded", String(open));
     const nm = el("div", "hname"); nm.appendChild(el("h3", null, ex));
     const best = ptsAll.length ? topOf(ptsAll.map(p => p.top)) : null;
-    nm.appendChild(el("span", "small", ptsAll.length ? "Last " + shortDate(ptsAll[ptsAll.length - 1].date) + " · 🏆 " + fmtW(best.w) + " × " + best.r : mine.length ? "Warm-ups only so far" : "No sets logged yet"));
+    if (ptsAll.length) { const ln = el("span", "small"); ln.append(document.createTextNode("Last: "), el("b", null, relDate(ptsAll[ptsAll.length - 1].date)), document.createTextNode(" · 🏆 " + fmtW(best.w) + " × " + best.r)); nm.appendChild(ln); }
+    else nm.appendChild(el("span", "small", mine.length ? "Warm-ups only so far" : "No sets logged yet"));
     row.appendChild(nm);
     const tv = pts.map(p => p.top.w), pc = pts.length > 1 ? pctChange(tv[0], tv[tv.length - 1]) : null;
     row.appendChild(sparkSVG(tv.slice(-12), pc == null || pc > 0));
@@ -515,11 +516,12 @@ function renderHistory() {
       const byDate = {}; mine.filter(s => s.date >= from).forEach(s => (byDate[s.date] = byDate[s.date] || []).push(s));
       const dates = Object.keys(byDate).sort().reverse();
       if (dates.length) {
-        card.appendChild(el("span", "lbl", "Sessions · tap a set to remove it"));
+        card.appendChild(el("span", "lbl", "Sessions · 📅 = the whole day · tap a set to remove it"));
         (expanded.has(ex) ? dates : dates.slice(0, 3)).forEach((d, idx) => {
           const r = el("div", "sess" + (idx === 0 ? " latest" : "")), chips = el("div", "chips"), list = byDate[d].sort((a, b) => a.t - b.t);
           chipsInto(chips, list, renderHistory);
-          r.append(el("span", "d", fmtDate(d)), chips); card.appendChild(r);
+          const db = el("button", "use sessd", "📅 " + relDate(d) + " ›"); db.type = "button"; db.setAttribute("aria-label", "See everything from " + longDate(d)); db.onclick = () => openDay(d);
+          r.append(db, chips); card.appendChild(r);
           const bar = setBar(list, renderHistory); if (bar) card.appendChild(bar);
         });
       } else if (!mine.length) card.appendChild(el("div", "none", "Log a set in Training and it shows up here."));
@@ -551,6 +553,72 @@ function renderHistory() {
   if (days.includes(hd)) box.appendChild(addCard(hd));
   // exercises with history that aren't in any of the current days (e.g. after changing plan)
   if (hd !== OTHER) { const o = orphanNames(); if (o.length) { const b = el("button", "add-btn other-btn", "Not in your current plan (" + o.length + ") ›"); b.onclick = () => { historyOther = true; renderHistory(); }; box.appendChild(b); } }
+}
+/* ---------- one day's workout: a sheet opened from History, the week row or the calendar ---------- */
+const WDL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const isoDate = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };
+const daysAgo = iso => Math.round((isoDate(todayISO()) - isoDate(iso)) / 86400e3);
+// "Today", "Yesterday", "Tue 3 Nov" this week, otherwise "28 Oct"
+function relDate(iso) {
+  const n = daysAgo(iso), dt = isoDate(iso);
+  if (n === 0) return "Today"; if (n === 1) return "Yesterday";
+  if (iso >= isoOf(mondayOf(new Date()))) return WD[dt.getDay()] + " " + dt.getDate() + " " + MON[dt.getMonth()];
+  return shortDate(iso) + (dt.getFullYear() !== new Date().getFullYear() ? " " + dt.getFullYear() : "");
+}
+function dayTitle(iso) {
+  const n = daysAgo(iso), dt = isoDate(iso), d = dt.getDate() + " " + MON[dt.getMonth()] + (dt.getFullYear() !== new Date().getFullYear() ? " " + dt.getFullYear() : "");
+  return n === 0 ? "Today · " + WD[dt.getDay()] + " " + d : n === 1 ? "Yesterday · " + WD[dt.getDay()] + " " + d : WDL[dt.getDay()] + " · " + d;
+}
+let daySheetOpen = false, dayIso = null;
+const loggedDates = () => Object.values(sessions).filter(s => (s.sets || []).length).map(s => s.date).sort();
+function openDay(iso) {
+  dayIso = iso; renderDaySheet();
+  if (!daySheetOpen) { daySheetOpen = true; $("daySheet").hidden = false; document.body.classList.add("menu-open"); pushLayer("day"); }
+}
+function closeDay() { if (!daySheetOpen) return; popLayer("day"); reallyCloseDay(); }
+function reallyCloseDay() { if (!daySheetOpen) return; daySheetOpen = false; $("daySheet").hidden = true; document.body.classList.remove("menu-open"); }
+function renderDaySheet() {
+  const iso = dayIso, sets = ((sessions[iso] || {}).sets || []).slice().sort((a, b) => a.t - b.t);
+  $("dayTitle").textContent = dayTitle(iso);
+  const b = $("dayBody"); b.innerHTML = ""; b.scrollTop = 0;
+  // personal bests set on this day (beat everything before it)
+  const best = {}, pbs = new Set();
+  working(allSets()).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.t - b.t).forEach(x => {
+    const p = best[x.ex], beat = !p || x.w > p.w || (x.w === p.w && x.r > p.r);
+    if (p && beat && x.date === iso) pbs.add(x.ex);
+    if (beat) best[x.ex] = x;
+  });
+  if (!sets.length) b.appendChild(el("div", "empty", "Rest day. Nothing logged."));
+  else {
+    const exs = [], ws = working(sets); sets.forEach(x => { if (!exs.includes(x.ex)) exs.push(x.ex); });
+    const dnames = [...new Set(sets.map(x => x.day).filter(Boolean))], vol = disp(ws.reduce((a, x) => a + x.w * x.r, 0));
+    const parts = [(dnames.length ? dnames.join(" + ") + " day" : "Workout"), exs.length + " exercise" + (exs.length === 1 ? "" : "s"), ws.length + " set" + (ws.length === 1 ? "" : "s"),
+      (U() === "kg" ? trim(r1(vol / 1000)) + " t" : fmtBig(vol) + " lbs") + " lifted"];
+    if (pbs.size) parts.push(pbs.size + " PB" + (pbs.size === 1 ? "" : "s") + " 🏆");
+    b.appendChild(el("span", "small daysum", parts.join(" · ")));
+    exs.forEach(ex => {
+      const r = el("div", "dwex"), h = el("div", "dwexh");
+      h.appendChild(el("b", null, ex)); if (pbs.has(ex)) h.appendChild(el("span", "daypb", "🏆 PB"));
+      const chips = el("div", "chips"); chipsInto(chips, sets.filter(x => x.ex === ex).map(x => ({ ...x, date: iso })));
+      r.append(h, chips); b.appendChild(r);
+    });
+  }
+  // previous / next day you trained
+  const ds = loggedDates(), prev = ds.filter(d => d < iso).pop(), next = ds.find(d => d > iso && d <= todayISO());
+  const nav = el("div", "daynav"), pb = el("button", "use", prev ? "‹ " + relDate(prev) : "‹"), nb = el("button", "use", next ? relDate(next) + " ›" : "›");
+  pb.type = nb.type = "button"; pb.disabled = !prev; nb.disabled = !next;
+  pb.setAttribute("aria-label", prev ? "Previous training day, " + longDate(prev) : "No earlier training day");
+  nb.setAttribute("aria-label", next ? "Next training day, " + longDate(next) : "No later training day");
+  pb.onclick = () => { dayIso = prev; renderDaySheet(); }; nb.onclick = () => { dayIso = next; renderDaySheet(); };
+  nav.append(pb, nb); b.appendChild(nav);
+  const ed = el("button", "use primary dayedit", sets.length ? "Edit this day in Training" : "Log a workout on this day"); ed.type = "button";
+  ed.onclick = () => {
+    const counts = {}; sets.forEach(x => { if (x.day) counts[x.day] = (counts[x.day] || 0) + 1; });
+    const d = Object.keys(counts).sort((a, c) => counts[c] - counts[a])[0];
+    closeDay(); if (d && days.includes(d)) { day = d; mem.set("day", d); renderDayBtns(); renderSelect(); }
+    $("date").value = iso; $("date").onchange(); setTab("training");
+  };
+  b.appendChild(ed);
 }
 // open one exercise in History (used by Progress)
 function openInHistory(ex) {
@@ -669,8 +737,9 @@ function weekCard(st) {
   const row = el("div", "wkdays");
   ["M", "T", "W", "T", "F", "S", "S"].forEach((d, i) => {
     const x = new Date(st.thisMon); x.setDate(x.getDate() + i); const iso = isoOf(x);
-    const s = el("span", st.wd.has(iso) ? "on" : iso === todayISO() ? "today" : iso > todayISO() ? "later" : null, d);
-    s.setAttribute("aria-label", dayName(iso) + (st.wd.has(iso) ? ", trained" : "")); row.appendChild(s);
+    const fut = iso > todayISO(), s = el(fut ? "span" : "button", st.wd.has(iso) ? "on" : iso === todayISO() ? "today" : fut ? "later" : null, d);
+    s.setAttribute("aria-label", dayName(iso) + (st.wd.has(iso) ? ", trained" : "") + (fut ? "" : ". Tap to see that day"));
+    if (!fut) { s.type = "button"; s.onclick = () => openDay(iso); } row.appendChild(s);
   });
   right.appendChild(row);
   right.appendChild(el("span", "small", st.streak > 0 ? (n >= T ? "Streak extended to " + st.streak + " weeks." : "Hit it to make it " + (st.prev + 1) + " weeks in a row.") : "Hit it to start a streak."));
@@ -738,8 +807,9 @@ function calCard() {
   for (let i = 0; i < lead; i++) cal.appendChild(el("span", "blank"));
   for (let d = 1; d <= daysIn; d++) {
     const iso = y + "-" + pad(m + 1) + "-" + pad(d), hit = tr.has(iso);
-    const c = el("span", (hit ? "t" : "") + (iso === todayISO() ? " today" : ""), String(d));
-    c.setAttribute("aria-label", d + (hit ? ", trained" : "")); cal.appendChild(c);
+    const fut = iso > todayISO(), c = el(fut ? "span" : "button", (hit ? "t" : "") + (iso === todayISO() ? " today" : "") + (fut ? " later" : ""), String(d));
+    c.setAttribute("aria-label", d + (hit ? ", trained" : "") + (fut ? "" : ". Tap to see that day"));
+    if (!fut) { c.type = "button"; c.onclick = () => openDay(iso); } cal.appendChild(c);
   }
   card.append(head, cal);
   return card;
@@ -1417,6 +1487,7 @@ const layerClosers = {
   del: () => { if (!deleting) { $("delFull").hidden = true; document.body.classList.remove("menu-open"); } },
   rkf: () => { if (rkFlow) { rkFlow = null; $("rkFull").hidden = true; document.body.classList.remove("menu-open"); } },
   date: () => { $("dpick").hidden = true; },
+  day: () => reallyCloseDay(),
   grp: () => { if (typeof gUI !== "undefined" && !["group", "home"].includes(gUI.view)) { gUI.view = "group"; gOpenVote = null; gProposing = false; if (tab === "group") renderGroup(); } }
 };
 let ignorePop = 0;
@@ -1446,8 +1517,9 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
 - Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
 - Me tab: your level, a muscle map (front/back, male or female figure, chosen in Settings) where each of 9 muscles (Chest, Back, Shoulders, Biceps, Triceps, Core, Quads, Hamstrings & glutes, Calves) has a rank: Bronze, Silver, Gold, Platinum, Diamond (each with steps I, II, III), then Legend. Points: +10 per day you do at least 2 sets for that muscle (max 3 days a week); a personal best (estimated 1-rep max, after the first 2 sessions of an exercise as baseline) gives 3 points per 1% stronger (3 to 15, max one per exercise per week). 14 days without training a muscle drops it one step, then one more step per extra week (never below Bronze I); double points while climbing back. Legend also needs 40 of the last 52 weeks trained. The ? button explains it; tap a muscle for details; 'Which muscle each exercise counts for' sets the muscle of your own exercises. Weigh-ins and goal weight are lower on the Me tab. Group members can see each other's muscle maps.
-- History tab: one row per exercise with a trend line and % change. Tap one to open a detailed chart (kg up the side, dates along the bottom; tap a point to see that session), switch between Heaviest set, Est. 1-rep max and Total volume, and pick 1M, 3M, 6M, 1Y or All, which also filters the numbers and the sessions list. Rename or Remove is at the bottom of the open exercise.
-- Progress tab: an overview with Week/Month/Year/All: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target and the streak; Most improved (last 3 months); Needs attention (stalled exercises); and a month calendar of training days.
+- History tab: one row per exercise with a trend line and % change. Tap one to open a detailed chart (kg up the side, dates along the bottom; tap a point to see that session), switch between Heaviest set, Est. 1-rep max and Total volume, and pick 1M, 3M, 6M, 1Y or All, which also filters the numbers and the sessions list. Rename or Remove is at the bottom of the open exercise. Each row says when you last did it (Today, Yesterday, the weekday this week, or the date). In the open exercise, tap a session's date (📅) to see everything you did that day.
+- Progress tab: an overview with Week/Month/Year/All: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target and the streak; Most improved (last 3 months); Needs attention (stalled exercises); and a month calendar of training days. Tap any day in the week row or the calendar to see that day's whole workout.
+- Day view: shows every exercise and set from one day, the day's totals and any 🏆 PBs, with ‹ › to jump to the previous or next training day and "Edit this day in Training" to fix or add sets.
 - Body weight: on the Me tab, below the muscle map: log your weight, see the 7-day average, weekly rate and goal weight.
 - Coach answers have a 🚩 Report button if an answer is wrong or inappropriate.
 - Wrong day: remove the set, change the date at the top right, save it again.
@@ -3050,6 +3122,7 @@ function wire() {
   document.querySelectorAll("[data-ip]").forEach(b => b.onclick = () => { prefs = { ...prefs, introPeriod: b.dataset.ip }; savePrefs(); renderSettings(); });
   document.querySelectorAll("[data-fig]").forEach(b => b.onclick = () => { prefs = { ...prefs, figure: b.dataset.fig }; savePrefs(); renderSettings(); if (tab === "body") renderMe(); gSchedule(false); });
   $("rkDim").onclick = closeRk; $("rkClose").onclick = closeRk;
+  $("dayDim").onclick = closeDay; $("dayClose").onclick = closeDay;
   $("privOpen").onclick = () => openDoc("privacy.html", "Privacy policy");
   $("docBack").onclick = closeDoc;
   $("delAcc").onclick = () => { $("menuClose").click(); setTimeout(openDelete, 320); };

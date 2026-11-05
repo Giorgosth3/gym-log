@@ -371,6 +371,28 @@ svg.ring{width:110px;height:110px;flex-shrink:0}
 .plist.stalled{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
 .plist.stalled>.lbl{color:var(--warn)}
 .calcard{display:flex;flex-direction:column;gap:8px}
+/* one day's workout */
+#dayBody{display:flex;flex-direction:column;gap:10px}
+.daysum{color:var(--muted)}
+#daySheet .addpanel{top:auto;max-height:calc(100dvh - env(safe-area-inset-top,0px) - 40px)}
+#daySheet .addbody{padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+.dwex{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px}
+.dwexh{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.dwexh b{font:600 1rem var(--body);overflow-wrap:anywhere}
+.daypb{font:700 .78rem var(--body);color:#b38600;white-space:nowrap}
+.daynav{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.daynav .use{padding:11px 4px;font-size:.9rem}
+.daynav .use:disabled{opacity:.4;cursor:default}
+.dayedit{padding:12px;font-size:.95rem}
+.sess .sessd{padding:7px 9px;font-size:.78rem;min-height:34px;white-space:normal;text-align:left;line-height:1.15}
+.hcard .sess{grid-template-columns:6.8em 1fr auto}
+.wkdays button{flex:1;text-align:center;padding:6px 0;border-radius:7px;font:600 .7rem var(--body);background:var(--chip);color:var(--muted);border:0;cursor:pointer}
+.wkdays button.on{background:var(--ok);color:var(--bg)}
+.wkdays button.today{background:transparent;outline:2px solid var(--accent);outline-offset:-2px;color:var(--ink)}
+.cal button{aspect-ratio:1;border-radius:7px;background:var(--chip);font:500 .75rem var(--num);display:flex;align-items:center;justify-content:center;color:var(--muted);border:0;padding:0;cursor:pointer}
+.cal button.t{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.cal button.today{outline:2px solid var(--ink);outline-offset:-2px}
+.cal span.later{opacity:.45}
 .cal span{aspect-ratio:1;border-radius:7px;background:var(--chip);font:500 .75rem var(--num);display:flex;align-items:center;justify-content:center;color:var(--muted)}
 .cal span.t{background:var(--accent);color:var(--accent-ink);font-weight:700}
 .cal span.today{outline:2px solid var(--ink);outline-offset:-2px}
@@ -984,6 +1006,12 @@ body.touring .chatbub{z-index:19}
     <div class="addpanel"><div class="grab"></div>
       <div class="addhead"><h2 id="rkTitle"></h2><button class="icon-btn" id="rkClose" aria-label="Close">✕</button></div>
       <div class="addbody" id="rkBody"></div></div>
+  </div>
+  <div class="addsheet" id="daySheet" hidden role="dialog" aria-modal="true" aria-labelledby="dayTitle">
+    <div class="adddim" id="dayDim"></div>
+    <div class="addpanel"><div class="grab"></div>
+      <div class="addhead"><h2 id="dayTitle"></h2><button class="icon-btn" id="dayClose" aria-label="Close">✕</button></div>
+      <div class="addbody" id="dayBody"></div></div>
   </div>
   <div class="plan" id="rkFull" hidden role="dialog" aria-modal="true" aria-label="Your muscle map">
     <div class="planpanel"><div class="planbody" id="rkFullBody"></div></div>
