@@ -93,6 +93,7 @@ function renderExercise(prefill) {
   renderExGrid(); renderHint(); renderToday();
   const ex = $("ex").value; $("logCard").hidden = !ex; $("exTitle").textContent = ex;
   $("noteRow").hidden = !$("note").value && !noteOpen; $("noteOpen").hidden = !$("noteRow").hidden;
+  $("finishEx").hidden = !ex || !todaySets(ex).length || isFinished(ex);
   const done = todaySets(ex).length; $("setNo").textContent = ex ? "Set " + (done + 1) : "";
   if (prefill) prefillSet();
 }
@@ -117,11 +118,20 @@ function prefillSet() {
     note.textContent = "Filled in from set 1 last time (" + shortDate(last.date) + "). Adjust if needed."; note.hidden = false;
   }
 }
-let noteOpen = false, openInDone = false;
+let noteOpen = false;
+// "Finish exercise": finished exercises move to Done; closing one you haven't finished keeps it in Up next
+const finKey = () => "fin_" + (uid || "") + "_" + ($("date").value || todayISO());
+function finishedList() { try { return JSON.parse(mem.get(finKey()) || "[]") || []; } catch (e) { return []; } }
+const isFinished = ex => finishedList().includes(ex);
+function finishEx(ex) {
+  const l = finishedList(); if (!l.includes(ex)) { l.push(ex); mem.set(finKey(), JSON.stringify(l)); }
+  $("ex").value = ""; mem.set("ex_" + day, ""); noteOpen = false; renderExercise(false);
+  toast("✓ " + ex + " done · " + todaySets(ex).length + " set" + (todaySets(ex).length === 1 ? "" : "s"));
+}
 // tap an exercise to open its logger right where it is; tap it again to close it
 function pickEx(ex) {
   if ($("ex").value === ex) { $("ex").value = ""; mem.set("ex_" + day, ""); noteOpen = false; renderExercise(false); return; }
-  noteOpen = false; openInDone = todaySets(ex).length > 0;
+  noteOpen = false;
   $("ex").value = ex; mem.set("ex_" + day, ex); renderExercise(true);
   const tgt = $("exGrid").querySelector(".exitem.open"); if (!tgt) return;
   const hdr = Math.max(...[...document.querySelectorAll(".topbar, #dayBtns")].map(x => x.getBoundingClientRect().bottom), 0), r = tgt.getBoundingClientRect();
@@ -136,7 +146,7 @@ function renderExGrid() {
   grid.innerHTML = "";
   const names = namesFor(day), has = ex => todaySets(ex).length > 0;
   // the open exercise stays where it was opened until you close it
-  const inDone = ex => ex === cur ? openInDone : has(ex);
+  const inDone = ex => has(ex) && isFinished(ex);
   const next = names.filter(ex => !inDone(ex)), done = names.filter(ex => inDone(ex));
   const lastLine = ex => { const l = lastSession(ex); return l ? "Last: " + fmtW(l.sets[0].w) + " × " + l.sets[0].r + " · " + l.sets.length + " set" + (l.sets.length > 1 ? "s" : "") : "Not done yet"; };
   const item = ex => {
@@ -370,7 +380,85 @@ async function syncWake() {
   $("awakeLine").hidden = !(want && wakeLock);
 }
 
-/* ---------- history ---------- */
+/* ---------- history: one row per exercise with its trend; tap to open the chart and sessions ---------- */
+let hOpen = null;
+const H_RANGES = [["1M", 30], ["3M", 91], ["6M", 182], ["1Y", 365], ["All", 0]];
+const H_METRICS = [["top", "Heaviest set"], ["est", "Est. 1-rep max"], ["vol", "Total volume"]];
+const hRange = () => H_RANGES.some(r => r[0] === mem.get("hRange")) ? mem.get("hRange") : "3M";
+const hMetric = () => H_METRICS.some(m => m[0] === mem.get("hMet")) ? mem.get("hMet") : "top";
+function rangeFrom(k) { const n = (H_RANGES.find(r => r[0] === k) || [0, 0])[1]; if (!n) return ""; const d = new Date(); d.setDate(d.getDate() - n); return isoOf(d); }
+const topOf = l => l.reduce((a, s) => (s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a);
+// one point per session (working sets only): heaviest set, best estimated max, total volume (kg)
+function perSession(sets) {
+  const by = {}; working(sets).forEach(s => (by[s.date] = by[s.date] || []).push(s));
+  return Object.keys(by).sort().map(d => { const l = by[d]; return { date: d, top: topOf(l), est: Math.max(...l.map(e1rm)), vol: l.reduce((a, s) => a + s.w * s.r, 0), n: l.length }; });
+}
+const metricVal = (p, m) => m === "est" ? p.est : m === "vol" ? p.vol : p.top.w;
+const pctChange = (a, b) => a > 0 ? Math.round((b - a) / a * 100) : null;
+function sparkSVG(vals, up) {
+  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", "0 0 56 22"); svg.setAttribute("class", "spark"); svg.setAttribute("aria-hidden", "true");
+  if (vals.length < 2) return svg;
+  const lo = Math.min(...vals), hi = Math.max(...vals), sp = hi - lo || 1;
+  const pl = document.createElementNS(ns, "polyline");
+  pl.setAttribute("points", vals.map((v, i) => (2 + i * 52 / (vals.length - 1)).toFixed(1) + "," + (hi === lo ? 11 : 19 - (v - lo) / sp * 16).toFixed(1)).join(" "));
+  pl.setAttribute("fill", "none"); pl.setAttribute("stroke", up ? "var(--ok)" : "var(--warn)"); pl.setAttribute("stroke-width", "2.2"); pl.setAttribute("stroke-linecap", "round"); pl.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(pl); return svg;
+}
+const fmtBig = v => v >= 10000 ? trim(r1(v / 1000)) + "k" : String(Math.round(v));
+const dayName = longDate;
+// Detailed chart: kg (or lbs) up the side, dates along the bottom, tap a point to see that session.
+function detailChart(pts, metric) {
+  const W = 340, H = 200, L = 40, R = 14, T = 20, B = 26;
+  const vals = pts.map(p => disp(metricVal(p, metric)));
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 1) { lo -= metric === "vol" ? 50 : 2.5; hi += metric === "vol" ? 50 : 2.5; }
+  const padv = (hi - lo) * 0.12; lo = Math.max(0, lo - padv); hi += padv;
+  const ticks = niceTicks(lo, hi).filter(t => t >= lo && t <= hi);
+  const day = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).getTime(); };
+  const t0 = day(pts[0].date), t1 = day(pts[pts.length - 1].date);
+  const x = p => t1 === t0 ? (L + W - R) / 2 : L + (day(p.date) - t0) / (t1 - t0) * (W - L - R);
+  const y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("role", "img"); svg.setAttribute("class", "dchart");
+  svg.setAttribute("aria-label", H_METRICS.find(m => m[0] === metric)[1] + " per session, " + pts.length + " sessions");
+  const add = (tag, attrs, text, parent) => { const n = document.createElementNS(ns, tag); Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v)); if (text != null) n.textContent = text; (parent || svg).appendChild(n); return n; };
+  const F = "Rubik, sans-serif", muted = "var(--muted)";
+  add("text", { x: 4, y: 11, "font-size": 10, fill: muted, "font-family": F }, U());
+  ticks.forEach(t => { add("line", { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: "var(--line)" }); add("text", { x: L - 6, y: y(t) + 4, "text-anchor": "end", "font-size": 10.5, fill: muted, "font-family": F }, metric === "vol" ? fmtBig(t) : trim(t)); });
+  // date labels: up to 4, spread out
+  const idx = pts.length <= 4 ? pts.map((_, i) => i) : [0, Math.round((pts.length - 1) / 3), Math.round((pts.length - 1) * 2 / 3), pts.length - 1];
+  [...new Set(idx)].forEach((i, k, a) => add("text", { x: x(pts[i]), y: H - 7, "text-anchor": a.length > 1 && k === 0 ? "start" : a.length > 1 && k === a.length - 1 ? "end" : "middle", "font-size": 10.5, fill: muted, "font-family": F }, shortDate(pts[i].date)));
+  if (pts.length > 1) {
+    const d = pts.map((p, i) => (i ? "L" : "M") + x(p).toFixed(1) + " " + y(vals[i]).toFixed(1)).join(" ");
+    add("path", { d: d + ` L ${x(pts[pts.length - 1]).toFixed(1)} ${H - B} L ${x(pts[0]).toFixed(1)} ${H - B} Z`, fill: "var(--accent)", opacity: .12 });
+    add("path", { d, fill: "none", stroke: "var(--accent)", "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round" });
+  }
+  const bestI = vals.indexOf(Math.max(...vals));
+  pts.forEach((p, i) => add("circle", { cx: x(p), cy: y(vals[i]), r: i === bestI ? 5 : 3.2, fill: i === bestI ? "#f5c542" : "var(--accent)", stroke: "var(--surface)", "stroke-width": 1.5 }));
+  const tip = add("g", { "pointer-events": "none", visibility: "hidden" });
+  const show = i => {
+    const p = pts[i], cx = x(p), cy = y(vals[i]);
+    const line2 = metric === "top" ? fmtW(p.top.w) + " × " + p.top.r : metric === "est" ? fmtW(p.est) + " est. max" : fmtBig(disp(p.vol)) + U() + " · " + p.n + " set" + (p.n === 1 ? "" : "s");
+    tip.innerHTML = ""; const bw = 104, bx = Math.min(W - R - bw, Math.max(L, cx - bw / 2)), by = cy - 44 < 2 ? cy + 10 : cy - 44;
+    add("line", { x1: cx, x2: cx, y1: T, y2: H - B, stroke: "var(--ink)", "stroke-dasharray": "3 3", opacity: .45 }, null, tip);
+    add("circle", { cx, cy, r: 6, fill: "none", stroke: "var(--ink)", "stroke-width": 2 }, null, tip);
+    add("rect", { x: bx, y: by, width: bw, height: 32, rx: 7, fill: "var(--ink)" }, null, tip);
+    add("text", { x: bx + bw / 2, y: by + 13, "text-anchor": "middle", "font-size": 10, "font-weight": 700, fill: "var(--surface)", "font-family": "Barlow, sans-serif" }, dayName(p.date), tip);
+    add("text", { x: bx + bw / 2, y: by + 26, "text-anchor": "middle", "font-size": 11, fill: "var(--surface)", "font-family": F }, line2, tip);
+    tip.setAttribute("visibility", "visible"); svg.appendChild(tip);
+  };
+  svg.addEventListener("click", e => {
+    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * W;
+    let bi = 0; pts.forEach((p, i) => { if (Math.abs(x(p) - px) < Math.abs(x(pts[bi]) - px)) bi = i; });
+    show(bi);
+  });
+  return svg;
+}
+function hSeg(opts, cur, onPick, label) {
+  const seg = el("div", "seg hseg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", label);
+  opts.forEach(([k, n]) => { const b = el("button", null, n); b.type = "button"; b.setAttribute("aria-pressed", String(k === cur)); b.onclick = () => onPick(k); seg.appendChild(b); });
+  return seg;
+}
 function renderHistory() {
   if (historyOther && !orphanNames().length) historyOther = false;
   const hd = historyOther ? OTHER : day, box = $("history"); box.innerHTML = "";
@@ -378,16 +466,27 @@ function renderHistory() {
     const bk = el("button", "add-btn other-btn", "‹ Back to " + day); bk.onclick = () => { historyOther = false; renderHistory(); }; box.appendChild(bk);
     box.appendChild(el("p", "small tip", "Exercises you've logged that aren't in any of your current days. Their history is all here."));
   }
-  const all = allSets(), cur = $("date").value, names = hd === OTHER ? orphanNames() : days.includes(hd) ? namesFor(hd) : [];
+  const all = allSets(), names = hd === OTHER ? orphanNames() : days.includes(hd) ? namesFor(hd) : [];
   if (!names.length && hd !== OTHER) box.appendChild(el("div", "empty", days.length ? "No exercises for " + hd + " yet. Add your first one below." : "No workout days yet. Pick a plan in Settings → Workout days & exercises."));
-  else if (all.some(s => s.day === hd)) box.appendChild(el("p", "small tip", "Tap any set to remove it."));
+  else if (names.length) box.appendChild(el("p", "small tip", "Tap an exercise for its chart and sessions."));
+  const rk = hRange(), from = rangeFrom(rk), met = hMetric();
   names.forEach(ex => {
-    const byDate = {}; all.filter(s => s.ex === ex).forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
-    const dates = Object.keys(byDate).sort().reverse();
-    const card = el("div", "ex-card"), head = el("div", "ex-head");
-    const nSets = all.filter(s => s.ex === ex).length, key = hd + "|" + ex;
+    const mine = all.filter(s => s.ex === ex), key = hd + "|" + ex, open = hOpen === ex;
+    const ptsAll = perSession(mine), pts = ptsAll.filter(p => p.date >= from);
+    const card = el("div", "ex-card hcard" + (open ? " open" : ""));
+    // the row: name, last session and best, trend line and % change over the chosen range
+    const row = el("button", "hrow"); row.type = "button"; row.setAttribute("aria-expanded", String(open));
+    const nm = el("div", "hname"); nm.appendChild(el("h3", null, ex));
+    const best = ptsAll.length ? topOf(ptsAll.map(p => p.top)) : null;
+    nm.appendChild(el("span", "small", ptsAll.length ? "Last " + shortDate(ptsAll[ptsAll.length - 1].date) + " · 🏆 " + fmtW(best.w) + " × " + best.r : mine.length ? "Warm-ups only so far" : "No sets logged yet"));
+    row.appendChild(nm);
+    const tv = pts.map(p => p.top.w), pc = pts.length > 1 ? pctChange(tv[0], tv[tv.length - 1]) : null;
+    row.appendChild(sparkSVG(tv.slice(-12), pc == null || pc > 0));
+    row.appendChild(el("span", "hpct " + (pc == null ? "" : pc > 0 ? "up" : "flat"), pc == null ? "–" : (pc > 0 ? "+" : "") + pc + "%"));
+    row.appendChild(el("span", "hchev", open ? "⌃" : "⌄"));
+    row.onclick = () => { hOpen = open ? null : ex; renaming = null; armed = null; selSet = null; renderHistory(); };
     if (renaming === key) {
-      head.className = "ex-head renaming";
+      const head = el("div", "ex-head renaming");
       const inp = el("input"); inp.type = "text"; inp.id = "rename-input"; inp.value = ex; inp.setAttribute("aria-label", "New name for " + ex);
       const ok = el("button", "use primary", "Save"), no = el("button", "use", "Cancel");
       ok.onclick = () => renameExercise(hd, ex, inp.value);
@@ -395,42 +494,70 @@ function renderHistory() {
       inp.onkeydown = e => { if (e.key === "Enter") ok.click(); if (e.key === "Escape") no.click(); };
       head.append(inp, ok, no); card.appendChild(head);
       setTimeout(() => { inp.focus(); inp.select(); }, 0);
-    } else {
-      const btns = el("div", "btns");
+    } else card.appendChild(row);
+    if (open) {
+      if (ptsAll.length) {
+        card.appendChild(hSeg(H_METRICS, met, k => { mem.set("hMet", k); renderHistory(); }, "Chart shows"));
+        const cw = el("div", "hchart");
+        if (pts.length) { cw.appendChild(detailChart(pts, met)); cw.appendChild(el("span", "small", "Tap the chart to see a session. 🟡 = your best.")); }
+        else cw.appendChild(el("div", "none", "No sessions in this range. Pick a longer one below."));
+        card.appendChild(cw);
+        card.appendChild(hSeg(H_RANGES.map(r => [r[0], r[0]]), rk, k => { mem.set("hRange", k); renderHistory(); }, "Time range"));
+        if (pts.length) {
+          const b = topOf(pts.map(p => p.top)), mv = pts.map(p => metricVal(p, met)), ch = mv[mv.length - 1] - mv[0];
+          const st = el("div", "stats");
+          st.append(stat(fmtW(b.w) + " × " + b.r, "Best 🏆"), stat(fmtW(Math.max(...pts.map(p => p.est))), "Est. 1-rep max"),
+            stat(pts.length > 1 ? (ch > 0 ? "+" : "") + (met === "vol" ? fmtBig(disp(ch)) + U() : trim(disp(ch)) + U()) : "–", pts.length > 1 ? "since " + shortDate(pts[0].date) : "1 session", pts.length > 1 && ch > 0 ? "good" : ""));
+          card.appendChild(st);
+        }
+      }
+      // sessions in the range, newest first (warm-ups included)
+      const byDate = {}; mine.filter(s => s.date >= from).forEach(s => (byDate[s.date] = byDate[s.date] || []).push(s));
+      const dates = Object.keys(byDate).sort().reverse();
+      if (dates.length) {
+        card.appendChild(el("span", "lbl", "Sessions · tap a set to remove it"));
+        (expanded.has(ex) ? dates : dates.slice(0, 3)).forEach((d, idx) => {
+          const r = el("div", "sess" + (idx === 0 ? " latest" : "")), chips = el("div", "chips"), list = byDate[d].sort((a, b) => a.t - b.t);
+          chipsInto(chips, list, renderHistory);
+          r.append(el("span", "d", fmtDate(d)), chips); card.appendChild(r);
+          const bar = setBar(list, renderHistory); if (bar) card.appendChild(bar);
+        });
+      } else if (!mine.length) card.appendChild(el("div", "none", "Log a set in Training and it shows up here."));
+      const foot = el("div", "hfoot");
+      if (dates.length > 3) {
+        const m = el("button", "more", expanded.has(ex) ? "Show fewer" : "Show all " + dates.length + " sessions ›");
+        m.onclick = () => { expanded.has(ex) ? expanded.delete(ex) : expanded.add(ex); renderHistory(); };
+        foot.appendChild(m);
+      } else foot.appendChild(el("span"));
+      const nSets = mine.length;
       if (armed === key) {
-        // second step: confirm or cancel
-        const no = el("button", "use", "Cancel"), yes = el("button", "use danger", "Remove");
+        const zone = el("div", "remove-zone");
+        zone.appendChild(el("p", "small warn", nSets ? "This deletes " + ex + " and all " + nSets + " of its logged set" + (nSets > 1 ? "s" : "") + "." : "This removes " + ex + " from " + hd + "."));
+        const no = el("button", "use", "Cancel"), yes = el("button", "use danger", "Remove"), bt = el("div", "btns");
         yes.setAttribute("aria-label", "Confirm: remove " + ex);
         no.onclick = () => { armed = null; renderHistory(); };
-        yes.onclick = () => { armed = null; removeExercise(hd, ex, true); };
-        btns.append(no, yes);
+        yes.onclick = () => { armed = null; hOpen = null; removeExercise(hd, ex, true); };
+        bt.append(no, yes); zone.appendChild(bt); card.appendChild(foot); card.appendChild(zone);
       } else {
-        const ren = el("button", "use", "Rename"), rm = el("button", "use", "Remove");
+        const bt = el("div", "btns"), ren = el("button", "use", "Rename"), rm = el("button", "use", "Remove");
         rm.setAttribute("aria-label", "Remove " + ex);
         ren.onclick = () => { renaming = key; armed = null; adding = null; renderHistory(); };
         rm.onclick = () => { armed = key; renaming = null; renderHistory(); };
-        btns.append(ren, rm);
+        bt.append(ren, rm); foot.appendChild(bt); card.appendChild(foot);
       }
-      head.append(el("h3", null, ex), btns); card.appendChild(head);
-      if (armed === key) card.appendChild(el("p", "small warn", nSets ? "This deletes " + ex + " and all " + nSets + " of its logged set" + (nSets > 1 ? "s" : "") + "." : "This removes " + ex + " from " + hd + "."));
-    }
-    if (!dates.length) card.appendChild(el("div", "none", "No sets logged yet."));
-    (expanded.has(ex) ? dates : dates.slice(0, 3)).forEach((d, idx) => {
-      const row = el("div", "sess" + (idx === 0 ? " latest" : "")), chips = el("div", "chips"), list = byDate[d].sort((a, b) => a.t - b.t);
-      chipsInto(chips, list, renderHistory);
-      row.append(el("span", "d", fmtDate(d)), chips); card.appendChild(row);
-      const bar = setBar(list, renderHistory); if (bar) card.appendChild(bar);
-    });
-    if (dates.length > 3) {
-      const m = el("button", "more", expanded.has(ex) ? "Show fewer" : "Show all " + dates.length + " sessions");
-      m.onclick = () => { expanded.has(ex) ? expanded.delete(ex) : expanded.add(ex); renderHistory(); };
-      card.appendChild(m);
     }
     box.appendChild(card);
   });
   if (days.includes(hd)) box.appendChild(addCard(hd));
   // exercises with history that aren't in any of the current days (e.g. after changing plan)
   if (hd !== OTHER) { const o = orphanNames(); if (o.length) { const b = el("button", "add-btn other-btn", "Not in your current plan (" + o.length + ") ›"); b.onclick = () => { historyOther = true; renderHistory(); }; box.appendChild(b); } }
+}
+// open one exercise in History (used by Progress)
+function openInHistory(ex) {
+  const d = days.find(x => namesFor(x).includes(ex));
+  if (d) { day = d; mem.set("day", d); historyOther = false; renderDayBtns(); renderSelect(); } else historyOther = true;
+  hOpen = ex; setTab("history");
+  setTimeout(() => { const c = document.querySelector("#history .hcard.open"); if (c) c.scrollIntoView({ block: "start", behavior: "smooth" }); }, 50);
 }
 const OTHER = "\u0000other";
 let historyOther = false;
@@ -453,7 +580,7 @@ function addCard(hd) {
 }
 function pickExercise(d, ex, last) {
   day = d; mem.set("day", day); renderDayBtns(); renderSelect();
-  $("ex").value = ex; mem.set("ex_" + day, ex); openInDone = todaySets(ex).length > 0;
+  $("ex").value = ex; mem.set("ex_" + day, ex);
   if (last) { $("w").value = trim(disp(last.w)); $("r").value = last.r; }
   setTab("training");
 }
@@ -503,106 +630,128 @@ function lineChart(pts, opts = {}) {
   return svg;
 }
 function stat(value, label, cls) { const s = el("div", "stat"), b = el("b", cls || null, value); s.append(b, el("span", null, label)); return s; }
+/* ---------- progress: an overview of all your training ---------- */
 function renderProgress() {
-  const view = mem.get("pView") === "cons" ? "cons" : "ex";
-  document.querySelectorAll("[data-pview]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.pview === view)));
-  $("pvEx").hidden = view !== "ex"; $("pvCons").hidden = view !== "cons";
-  if (view === "cons") { renderConsistency(); return; }
-  const pDay = $("pDay"), pEx = $("pEx");
-  const orph = orphanNames(), dOpts = orph.length ? [...days, OTHER] : [...days];
-  let pd = mem.get("pDay"); if (!dOpts.includes(pd)) pd = days.includes(day) ? day : dOpts[0];
-  pDay.innerHTML = ""; dOpts.forEach(d => { const o = el("option", null, d === OTHER ? "Not in your plan" : d); o.value = d; pDay.appendChild(o); }); pDay.value = pd;
-  const names = pd === OTHER ? orph : namesFor(pd); let pe = mem.get("pEx_" + pd); if (!names.includes(pe)) pe = names[0] || "";
-  pEx.innerHTML = ""; names.forEach(n => pEx.appendChild(el("option", null, n))); pEx.value = pe;
   const box = $("progBody"); box.innerHTML = "";
-  if (!pe) { box.appendChild(el("div", "empty", "No exercises in " + pd + " yet.")); return; }
-  const sets = working(allSets().filter(s => s.ex === pe));
-  if (!sets.length) { box.appendChild(el("div", "empty", "No working sets logged for " + pe + " yet. Log one in Training and your progress will show here.")); }
-  else {
-    // personal best: heaviest working weight, then most reps
-    const pb = sets.reduce((a, s) => (s.w > a.w || (s.w === a.w && s.r > a.r)) ? s : a);
-    const pbCard = el("div", "card"), pbRow = el("div", "pb"), left = el("div");
-    left.append(el("span", "lbl", "Personal best"), el("b", null, fmtW(pb.w) + " × " + pb.r));
-    pbRow.append(left, el("span", "badge", "PB · " + shortDate(pb.date))); pbCard.appendChild(pbRow); box.appendChild(pbCard);
-    // #3 chart: estimated max (default) or top weight
-    const metric = mem.get("pMetric") === "top" ? "top" : "est";
-    const per = {}; sets.forEach(s => { const v = metric === "est" ? e1rm(s) : s.w; per[s.date] = Math.max(per[s.date] ?? -1, v); });
-    const dates = Object.keys(per).sort(), first = disp(per[dates[0]]), lastV = disp(per[dates[dates.length - 1]]), change = lastV - first;
-    const chart = el("div", "card chart"); chart.style.gap = "8px";
-    const seg = el("div", "seg");
-    [["est", "Est. max"], ["top", "Top weight"]].forEach(([k, n]) => { const b = el("button", null, n); b.setAttribute("aria-pressed", String(k === metric)); b.onclick = () => { mem.set("pMetric", k); renderProgress(); }; seg.appendChild(b); });
-    const head = el("span", "lbl", metric === "est" ? "Estimated 1-rep max" : "Top weight per session");
-    const big = el("div", "bigstat", trim(lastV) + U());
-    if (dates.length > 1) big.appendChild(el("small", change > 0 ? "good" : "", (change > 0 ? "+" : "") + trim(change) + U() + " since " + shortDate(dates[0])));
-    chart.append(seg, head, big, lineChart(dates.map(d => ({ label: shortDate(d), v: disp(per[d]) })), { area: true, label: (metric === "est" ? "Estimated max" : "Top weight") + " per session for " + pe }));
-    if (metric === "est") chart.appendChild(el("span", "small", "Estimated from your weight and reps, so you see progress even when you add reps instead of weight."));
-    box.appendChild(chart);
-    const stats = el("div", "stats");
-    stats.append(stat(String(dates.length), dates.length === 1 ? "session" : "sessions"), stat(fmtW(pb.w), "heaviest set"), stat(shortDate(dates[dates.length - 1]), "last session"));
-    box.appendChild(stats);
+  const per = ["week", "month", "year"].includes(mem.get("pPer")) ? mem.get("pPer") : "month";
+  const head = el("div", "phead"); head.appendChild(el("h2", null, "Your progress"));
+  head.appendChild(hSeg([["week", "Week"], ["month", "Month"], ["year", "Year"]], per, k => { mem.set("pPer", k); renderProgress(); }, "Period"));
+  box.appendChild(head);
+  // 4 numbers for the period
+  const from = periodStart(per), today = todayISO(), all = working(allSets()), inP = all.filter(s => s.date >= from && s.date <= today);
+  const st = weekStreak(), workouts = [...st.wd].filter(d => d >= from && d <= today).length, pbs = pbCount(from);
+  const vol = disp(inP.reduce((a, s) => a + s.w * s.r, 0));
+  const grid = el("div", "pstats"), card = (v, l, cls) => { const c = el("div", "card pstat"); c.append(el("b", cls || null, String(v)), el("span", null, l)); return c; };
+  grid.append(card(workouts, workouts === 1 ? "workout" : "workouts"), card(inP.length, inP.length === 1 ? "set" : "sets"),
+    card(U() === "kg" ? trim(r1(vol / 1000)) + " t" : fmtBig(vol) + " lbs", "lifted"), card(pbs, (pbs === 1 ? "personal best" : "personal bests") + " 🏆", "gold"));
+  box.appendChild(grid);
+  box.appendChild(el("span", "small pfor", PERIODS[per].replace(/^./, c => c.toUpperCase()) + " · since " + shortDate(from)));
+  box.appendChild(weekCard(st));
+  const imp = improvedCard(); box.appendChild(imp);
+  const stall = stalledCard(imp._names || []); if (stall) box.appendChild(stall);
+  box.appendChild(calCard());
+  if (!all.length) box.appendChild(el("p", "small center", "Your numbers fill in here as you log sets in Training."));
+}
+// this week against the weekly target: a ring, the 7 days, and the last 8 weeks
+function weekCard(st) {
+  const T = st.T, n = st.thisCount, c = el("div", "card wkcard");
+  const hd = el("div", "calhead"); hd.append(el("span", "lbl", "This week · target " + T), el("span", "small", st.streak > 0 ? "🔥 " + st.streak + "-week streak" : "")); c.appendChild(hd);
+  const top = el("div", "wktop");
+  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"), R = 44, C = 2 * Math.PI * R, f = Math.min(1, n / T);
+  svg.setAttribute("viewBox", "0 0 110 110"); svg.setAttribute("class", "ring"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", n + " of " + T + " workouts this week");
+  svg.innerHTML = `<circle cx="55" cy="55" r="${R}" stroke="var(--chip)" stroke-width="11" fill="none"/>` +
+    (n ? `<circle cx="55" cy="55" r="${R}" stroke="${n >= T ? "var(--ok)" : "var(--accent)"}" stroke-width="11" fill="none" stroke-linecap="round" stroke-dasharray="${(C * f).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 55 55)"/>` : "") +
+    `<text x="55" y="59" text-anchor="middle" font-family="Rubik, sans-serif" font-weight="700" font-size="26" fill="var(--ink)">${n}/${T}</text>` +
+    `<text x="55" y="77" text-anchor="middle" font-family="Barlow, sans-serif" font-size="11" fill="var(--muted)">workouts</text>`;
+  const right = el("div", "wkright"), left = T - n;
+  right.appendChild(el("b", "wkmsg", n >= T ? "Target hit this week! 💪" : left + " more to hit your target"));
+  const row = el("div", "wkdays");
+  ["M", "T", "W", "T", "F", "S", "S"].forEach((d, i) => {
+    const x = new Date(st.thisMon); x.setDate(x.getDate() + i); const iso = isoOf(x);
+    const s = el("span", st.wd.has(iso) ? "on" : iso === todayISO() ? "today" : iso > todayISO() ? "later" : null, d);
+    s.setAttribute("aria-label", dayName(iso) + (st.wd.has(iso) ? ", trained" : "")); row.appendChild(s);
+  });
+  right.appendChild(row);
+  right.appendChild(el("span", "small", st.streak > 0 ? (n >= T ? "Streak extended to " + st.streak + " weeks." : "Hit it to make it " + (st.prev + 1) + " weeks in a row.") : "Hit it to start a streak."));
+  top.append(svg, right); c.appendChild(top);
+  // last 8 weeks: ✓ when the target was hit, otherwise how many
+  const wk = el("div", "wkpast"); wk.setAttribute("aria-label", "Last 8 weeks");
+  for (let i = 7; i >= 0; i--) {
+    const mon = new Date(st.thisMon); mon.setDate(mon.getDate() - 7 * i);
+    let k = 0; for (let j = 0; j < 7; j++) { const x = new Date(mon); x.setDate(x.getDate() + j); if (st.wd.has(isoOf(x))) k++; }
+    const d = el("div"), b = el("b", i === 0 ? "now" : k >= T ? "hit" : "miss", i === 0 ? String(k) : k >= T ? "✓" : String(k));
+    d.setAttribute("aria-label", (i === 0 ? "This week" : "Week of " + shortDate(isoOf(mon))) + ": " + k + " of " + T);
+    d.append(b, el("span", null, i === 0 ? "now" : String(mon.getDate()))); wk.appendChild(d);
   }
-  // #8 plateau alerts for every exercise in this workout
-  plateausFor(pd).forEach(ex => {
-    const a = el("div", "alert"); const tags = el("div", "tags");
-    ["Aim for +1 rep", "Drop about 10% and build back up", "Swap to a similar exercise"].forEach(t => tags.appendChild(el("span", null, t)));
-    a.append(el("b", null, ex + " has stalled"), el("span", null, "No improvement in your last 3 sessions. Try one of these:"), tags);
-    box.appendChild(a);
-  });
+  c.appendChild(wk);
+  return c;
 }
-// An exercise has stalled when its last 3 sessions beat none of the sessions before them.
-function plateausFor(d) {
-  const out = [];
-  namesFor(d).forEach(ex => {
-    const per = {}; working(allSets().filter(s => s.ex === ex && s.day === d)).forEach(s => { per[s.date] = Math.max(per[s.date] ?? 0, e1rm(s)); });
-    const ds = Object.keys(per).sort(); if (ds.length < 4) return;
-    const recent = ds.slice(-3).map(k => per[k]), before = ds.slice(0, -3).map(k => per[k]);
-    if (Math.max(...recent) <= Math.max(...before) + 0.01) out.push(ex);
+// biggest gains in estimated max over the last 3 months
+function improvedCard() {
+  const c = el("div", "card plist"); c.appendChild(el("span", "lbl", "Most improved · last 3 months"));
+  const from = rangeFrom("3M"), names = [...new Set(allSets().map(s => s.ex))];
+  const rows = names.map(ex => { const p = perSession(allSets().filter(s => s.ex === ex)).filter(x => x.date >= from); if (p.length < 2) return null; return { ex, p, pc: pctChange(p[0].est, p[p.length - 1].est) }; })
+    .filter(r => r && r.pc > 0).sort((a, b) => b.pc - a.pc).slice(0, 3);
+  c._names = rows.map(r => r.ex);
+  if (!rows.length) { c.appendChild(el("span", "small", "Log the same exercise a few times and your biggest gains show up here.")); return c; }
+  rows.forEach(r => {
+    const b = el("button", "prow"); b.type = "button"; b.setAttribute("aria-label", r.ex + ", up " + r.pc + "%. Open in History");
+    b.append(el("span", "pname", r.ex), sparkSVG(r.p.map(x => x.est).slice(-12), true), el("b", "hpct up", "+" + r.pc + "%"));
+    b.onclick = () => openInHistory(r.ex); c.appendChild(b);
   });
-  return out;
+  return c;
 }
-// #5 consistency: calendar, sessions per week, weekly target
+// exercises you still do that haven't improved in their last 3 sessions
+function stalledCard(skip) {
+  const inPlan = new Set(days.flatMap(d => namesFor(d))), today = new Date(), out = [];
+  inPlan.forEach(ex => {
+    if (skip.includes(ex)) return;
+    const p = perSession(allSets().filter(s => s.ex === ex)); if (p.length < 4) return;
+    const [y, m, d] = p[p.length - 1].date.split("-").map(Number); if ((today - new Date(y, m - 1, d)) / 86400e3 > 42) return;
+    const recent = Math.max(...p.slice(-3).map(x => x.est)), before = Math.max(...p.slice(0, -3).map(x => x.est));
+    if (recent > before + 0.01) return;
+    const bi = p.findIndex(x => x.est >= before - 0.01), [by, bm, bd] = p[bi].date.split("-").map(Number);
+    const weeks = Math.floor((today - new Date(by, bm - 1, bd)) / (7 * 86400e3));
+    if (weeks >= 3) out.push({ ex, p, weeks });
+  });
+  if (!out.length) return null;
+  const c = el("div", "card plist stalled"); c.appendChild(el("span", "lbl", "Needs attention · stalled"));
+  out.sort((a, b) => b.weeks - a.weeks).slice(0, 4).forEach(r => {
+    const b = el("button", "prow"); b.type = "button"; b.setAttribute("aria-label", r.ex + ", no progress for " + r.weeks + " weeks. Open in History");
+    const nm = el("span", "pname"); nm.append(document.createTextNode(r.ex), el("small", null, "No progress for " + r.weeks + " weeks"));
+    b.append(nm, sparkSVG(r.p.slice(-8).map(x => x.est), false), el("b", "hpct flat", "0%"));
+    b.onclick = () => openInHistory(r.ex); c.appendChild(b);
+  });
+  c.appendChild(el("span", "small", "Try adding 1 rep each session, a small weight jump, or drop about 10% and build back up."));
+  return c;
+}
+// month calendar of training days
 let calMonth = null;
 function trainedDates() { const set = new Set(); Object.values(sessions).forEach(s => { if (working(s.sets || []).length) set.add(s.date); }); return set; }
 const mondayOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
-function renderConsistency() {
-  const box = $("pvCons"); box.innerHTML = "";
+function calCard() {
   const tr = trainedDates(), now = new Date();
   if (!calMonth) calMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const y = calMonth.getFullYear(), m = calMonth.getMonth(), daysIn = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;
-  const card = el("div", "card"), head = el("div", "calhead"), prev = el("button", null, "‹"), next = el("button", null, "›");
+  const card = el("div", "card calcard"), head = el("div", "calhead"), prev = el("button", null, "‹"), next = el("button", null, "›");
   prev.setAttribute("aria-label", "Previous month"); next.setAttribute("aria-label", "Next month");
-  prev.onclick = () => { calMonth = new Date(y, m - 1, 1); renderConsistency(); };
-  next.onclick = () => { calMonth = new Date(y, m + 1, 1); renderConsistency(); };
+  prev.onclick = () => { calMonth = new Date(y, m - 1, 1); card.replaceWith(calCard()); };
+  next.onclick = () => { calMonth = new Date(y, m + 1, 1); card.replaceWith(calCard()); };
   next.disabled = y === now.getFullYear() && m === now.getMonth();
   const monthName = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m] + " " + y;
-  head.append(prev, el("span", "lbl", monthName), next);
+  let inMonth = 0;
+  for (let d = 1; d <= daysIn; d++) if (tr.has(y + "-" + pad(m + 1) + "-" + pad(d))) inMonth++;
+  head.append(prev, el("span", "lbl", monthName + " · " + inMonth + " day" + (inMonth === 1 ? "" : "s")), next);
   const cal = el("div", "cal"); cal.setAttribute("role", "grid"); cal.setAttribute("aria-label", "Training days in " + monthName);
   ["M", "T", "W", "T", "F", "S", "S"].forEach(d => cal.appendChild(el("span", "wd", d)));
   for (let i = 0; i < lead; i++) cal.appendChild(el("span", "blank"));
-  let inMonth = 0;
   for (let d = 1; d <= daysIn; d++) {
-    const iso = y + "-" + pad(m + 1) + "-" + pad(d), hit = tr.has(iso); if (hit) inMonth++;
+    const iso = y + "-" + pad(m + 1) + "-" + pad(d), hit = tr.has(iso);
     const c = el("span", (hit ? "t" : "") + (iso === todayISO() ? " today" : ""), String(d));
     c.setAttribute("aria-label", d + (hit ? ", trained" : "")); cal.appendChild(c);
   }
-  card.append(head, cal); box.appendChild(card);
-  // last 8 weeks
-  const target = prefs.weekTarget, weeks = [], m0 = mondayOf(now);
-  for (let i = 7; i >= 0; i--) {
-    const start = new Date(m0); start.setDate(start.getDate() - i * 7);
-    const end = new Date(start); end.setDate(end.getDate() + 6);
-    const a = isoOf(start), b = isoOf(end); let n = 0; tr.forEach(d => { if (d >= a && d <= b) n++; });
-    weeks.push({ label: start.getDate() + " " + MON[start.getMonth()], n, current: i === 0 });
-  }
-  const wc = el("div", "card"), wh = el("div", "calhead"); wh.append(el("span", "lbl", "Sessions per week"), el("span", "lbl", "Target " + target + " / week"));
-  const bars = el("div", "weeks"), maxN = Math.max(target, ...weeks.map(w => w.n), 1);
-  weeks.forEach(w => { const d = el("div"), i = el("i", w.n >= target ? "" : "low"); i.style.height = (w.n / maxN * 52 + 2) + "px"; d.append(el("span", "n", String(w.n)), i, el("span", null, w.label)); d.setAttribute("aria-label", "Week of " + w.label + ": " + w.n + " sessions"); bars.appendChild(d); });
-  wc.append(wh, bars); box.appendChild(wc);
-  const full = weeks.filter(w => !w.current), onTarget = full.filter(w => w.n >= target).length, avg = full.reduce((a, w) => a + w.n, 0) / full.length;
-  const stats = el("div", "stats");
-  stats.append(stat(String(inMonth), "sessions in " + MON[m]), stat(trim(avg), "avg / week"), stat(onTarget + " of " + full.length, "weeks on target"));
-  box.appendChild(stats);
-  if (!tr.size) box.appendChild(el("p", "small center", "Your training days will fill in here as you log sets."));
+  card.append(head, cal);
+  return card;
 }
 
 /* ---------- body weight ---------- */
@@ -1177,14 +1326,13 @@ let tourPending = false, tour = null;
 const TOUR = [
   { tab: "training", k: "Welcome 👋", t: "Quick tour?", p: "STEPS short steps, about a minute, showing every part of the app. You can replay it any time in Settings → Help.", btn: "Show me", skip: "Skip" },
   { tab: "training", sel: "#dayBtns", t: "Your workout days", p: "Pick today's workout day. You can rename days, add your own or switch to another plan any time in Settings." },
-  { tab: "training", sel: "#exGrid", t: "Your workout", p: "Tap an exercise to open it and log sets; tap it again to close it. Exercises you've logged move to Done today. Hold and drag to reorder; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
+  { tab: "training", sel: "#exGrid", t: "Your workout", p: "Tap an exercise to open it and log sets; tap it again to close it. Tap ✓ Finish exercise when you're done with it and it moves to Done today. Hold and drag to reorder; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
   { tab: "training", sel: "#logCard .pair", t: "Weight and reps", p: "Set 1 is filled in from set 1 last time, so you can match or beat it. Set 2 copies the set you just did. Adjust with − and +." },
   { tab: "training", sel: "#save", t: "Save the set", p: "Tap Save set. A rest timer starts at the top. Tap it for +30s or Skip. Beat your best and you'll get a personal-best celebration 🏆" },
   { tab: "training", sel: "#todayBox", t: "Today so far", p: "Your sets for today appear here. Saved one by mistake? Tap it, then Remove set." },
   { tab: "training", sel: ".datewrap", t: "Logging another day?", p: "Tap the date to log or view sets on a different day, e.g. if you forgot to log yesterday." },
-  { tab: "history", sel: "#history .ex-card", t: "History", p: "Every exercise with all your past sessions. Open one to see the sets, rename it or remove it." },
-  { tab: "progress", pview: "ex", sel: "#pvEx", t: "Progress: exercises", p: "Pick an exercise to see your strength trend, your personal best and a warning if you've stopped improving." },
-  { tab: "progress", pview: "cons", sel: "#pvCons", t: "Progress: consistency", p: "A calendar of the days you trained and how many workouts you did each week against your target." },
+  { tab: "history", sel: "#history .ex-card", t: "History", p: "Every exercise with its trend. Tap one for a detailed chart (heaviest set, estimated max or volume), pick 1M to All, see every session, rename it or remove it." },
+  { tab: "progress", sel: "#progBody .wkcard", t: "Progress", p: "Your week, month or year at a glance: workouts, sets, kg lifted and personal bests. The ring shows this week against your target, then your most improved and stalled exercises and a calendar of training days." },
   { tab: "group", sel: "#grp", t: "Group", p: "Make a private group with friends from your gym, vote in the exercises you all do, and see who lifts the heaviest. Your Training sets count automatically." },
   { tab: "body", sel: "#meTop .rkmapcard", t: "Me: your muscle ranks", p: "Every muscle earns a rank, from Bronze to Diamond, by training it and beating your records. Tap ? to see how it works. Your weigh-ins and goal weight are further down." },
   { tab: "training", sel: "#chatBub", round: true, t: "Ask the coach", p: "Tap HELP to ask how to use the app or how to do an exercise. Press and hold it to move it out of the way." },
@@ -1296,7 +1444,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Top bar: menu button (☰) opens Settings; the date button (top right) picks the day you're logging; a chat button opens this coach. After saving a set, a rest timer appears at the top: tap it for +30s or Skip.
 - Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders).
 - Bottom tabs: Training, History, Progress, Group, Me.
-- Training tab: a list for the chosen day: \"Up next\" (exercises not done yet), \"+ Add exercise\", and \"Done today\". Tap an exercise to open its logger in place, tap it again to close it. Any number of sets per exercise. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
+- Training tab: a list for the chosen day: \"Up next\" (exercises not done yet), \"+ Add exercise\", and \"Done today\". Tap an exercise to open its logger in place, tap it again to close it. After at least one set, \"✓ Finish exercise\" (under Save set) moves it to Done today; closing without finishing keeps it in Up next. Any number of sets per exercise. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
 - Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
 - Add an exercise: "+ Add exercise" at the end of the exercise buttons (or in Settings → Workout days & exercises, open a day). It searches the built-in list of 130+ exercises grouped by muscle with equipment versions, shows the user's own exercises first with their last result, and lets them type any name as their own. It asks "Did you mean…?" if a typed name is almost the same as an existing one, so history stays together.
 - Rename or remove an exercise: Settings → Workout days & exercises (open the day) or the History tab. Renaming updates past sets everywhere; renaming onto an existing name offers to merge the two. Removing from a day can keep the history or delete it.
@@ -1307,7 +1455,8 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
 - Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
 - Me tab: your level, a muscle map (front/back, male or female figure, chosen in Settings) where each of 9 muscles (Chest, Back, Shoulders, Biceps, Triceps, Core, Quads, Hamstrings & glutes, Calves) has a rank: Bronze, Silver, Gold, Platinum, Diamond (each with steps I, II, III), then Legend. Points: +10 per day you do at least 2 sets for that muscle (max 3 days a week); a personal best (estimated 1-rep max, after the first 2 sessions of an exercise as baseline) gives 3 points per 1% stronger (3 to 15, max one per exercise per week). 14 days without training a muscle drops it one step, then one more step per extra week (never below Bronze I); double points while climbing back. Legend also needs 40 of the last 52 weeks trained. The ? button explains it; tap a muscle for details; 'Which muscle each exercise counts for' sets the muscle of your own exercises. Weigh-ins and goal weight are lower on the Me tab. Group members can see each other's muscle maps.
-- Progress tab: Exercises view (estimated 1-rep max chart, personal best, plateau alerts) and Consistency view (calendar, weekly sessions).
+- History tab: one row per exercise with a trend line and % change. Tap one to open a detailed chart (kg up the side, dates along the bottom; tap a point to see that session), switch between Heaviest set, Est. 1-rep max and Total volume, and pick 1M, 3M, 6M, 1Y or All, which also filters the numbers and the sessions list. Rename or Remove is at the bottom of the open exercise.
+- Progress tab: an overview with Week/Month/Year: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target with the last 8 weeks (✓ = target hit) and the streak; Most improved (last 3 months); Needs attention (stalled exercises); and a month calendar of training days.
 - Body tab: log body weight, 7-day average, weekly rate, goal weight.
 - Wrong day: remove the set, change the date at the top right, save it again.
 - Sync: sign in with the same Google account on any phone; works offline at the gym and syncs later. Each person's data is private.
@@ -1669,7 +1818,7 @@ function removeDay(d) {
 }
 
 /* ---------- colours: built-in and your own themes ---------- */
-const BUILTIN = [["auto", "Auto"], ["light", "Light"], ["dark", "Dark"], ["ael", "AEL Blue"], ["ael-yellow", "AEL Yellow"], ["ael-soft", "AEL Soft"]];
+const BUILTIN = [["auto", "Auto"], ["light", "Light"], ["dark", "Dark"], ["ael-soft", "Golden"]];
 const VAR_KEYS = ["--bg", "--surface", "--ink", "--muted", "--line", "--accent", "--accent-ink", "--ok", "--chip", "--danger", "--warn", "--pressed", "--pressed-ink", "color-scheme"];
 let themeEditing = null, themeArmed = null;
 const hexRgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
@@ -1690,6 +1839,7 @@ function themeVars(t) {
 }
 function customThemes() { return Array.isArray(prefs.customThemes) ? prefs.customThemes : []; }
 function paintTheme(previewVars) {
+  if (["ael", "ael-yellow"].includes(mem.get("theme"))) mem.set("theme", "auto"); // retired colour themes
   const r = document.documentElement, t = mem.get("theme") || "auto";
   VAR_KEYS.forEach(k => r.style.removeProperty(k));
   let vars = previewVars || null;
@@ -1824,6 +1974,7 @@ async function renameExercise(d, oldName, newName) {
   });
   days.forEach(k => { if (mem.get("ex_" + k) === oldName) mem.set("ex_" + k, newName); if (mem.get("pEx_" + k) === oldName) mem.set("pEx_" + k, newName); });
   if (expanded.has(oldName)) { expanded.delete(oldName); expanded.add(newName); }
+  if (hOpen === oldName) hOpen = newName;
   renaming = null; renderSelect(); renderHistory(); renderSettings();
   if ((prefs.muscles || {})[oldName] && !(prefs.muscles || {})[newName]) { const pm = { ...prefs.muscles, [newName]: prefs.muscles[oldName] }; delete pm[oldName]; prefs = { ...prefs, muscles: pm }; savePrefs(); }
   saveLists(); changed.forEach(s => writeSession(s.date, s)); gRename(oldName, newName);
@@ -2838,6 +2989,7 @@ function renderDatePick() {
 /* ---------- wiring ---------- */
 function wire() {
   $("date").value = todayISO(); $("date").max = todayISO();
+  $("finishEx").onclick = () => { const ex = $("ex").value; if (ex) finishEx(ex); };
   $("noteOpen").onclick = () => { noteOpen = true; $("noteRow").hidden = false; $("noteOpen").hidden = true; $("note").focus(); };
   // no logging ahead: the calendar stops at today (and today moves on if the app stays open past midnight)
   const keepMax = () => { $("date").max = todayISO(); if ($("date").value > todayISO()) { $("date").value = todayISO(); renderDateLbl(); renderUnits(); renderPane(); } };
@@ -2848,7 +3000,6 @@ function wire() {
   $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO();
     if ($("date").value > todayISO()) { $("date").value = todayISO(); toast("You can't log a future day. Showing today.", true); } renderDateLbl(); renderUnits(); renderPane(); };
   renderDateLbl();
-  document.querySelectorAll("[data-pview]").forEach(b => b.onclick = () => { mem.set("pView", b.dataset.pview); renderProgress(); });
 
   document.querySelectorAll("[data-step]").forEach(b => b.onclick = () => {
     const f = $(b.dataset.step), dir = Number(b.dataset.dir), v = parseFloat(String(f.value).replace(",", ".")) || 0;
@@ -2872,8 +3023,6 @@ function wire() {
   $("bwMinus").onclick = () => bwStep(-1); $("bwPlus").onclick = () => bwStep(1);
   $("bwSave").onclick = saveWeighIn;
   // progress selectors
-  $("pDay").onchange = () => { mem.set("pDay", $("pDay").value); renderProgress(); };
-  $("pEx").onchange = () => { mem.set("pEx_" + $("pDay").value, $("pEx").value); renderProgress(); };
   // settings
   document.querySelectorAll("[data-unit]").forEach(b => b.onclick = () => {
     if (prefs.units === b.dataset.unit) return;
