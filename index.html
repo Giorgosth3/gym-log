@@ -381,6 +381,17 @@ svg.ring{width:110px;height:110px;flex-shrink:0}
 .wkbub::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink)}
 .wkbub.first{transform:translateX(-22%)}.wkbub.first::after{left:22%}
 .wkbub.last{transform:translateX(-78%)}.wkbub.last::after{left:78%}
+/* propose: search + day filter */
+.gfilter{display:flex;flex-direction:column;gap:8px;margin:4px 0 2px}
+.gsearch{position:relative}
+.gsearch .gsicon{position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:.6;pointer-events:none}
+.gsearch input{width:100%;box-sizing:border-box;font:500 1rem var(--body);padding:11px 12px 11px 38px;border-radius:12px;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
+.gsearch input:focus{outline:none;border-color:var(--ink)}
+.gdayf{display:flex;flex-wrap:wrap;gap:6px}
+.gdayf button{font:600 .82rem var(--body);padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer}
+.gdayf button[aria-pressed="true"]{background:var(--pressed);color:var(--pressed-ink);border-color:var(--pressed)}
+.gpick[hidden],.gphd[hidden]{display:none!important}
+.gnone{color:var(--muted);text-align:center}
 #dayBtns button.hasdate{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;gap:1px}
 #dayBtns .dlast{font:500 .68rem var(--body);opacity:.8;white-space:nowrap}
 .cal span.later{opacity:.45}

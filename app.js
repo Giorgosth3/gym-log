@@ -405,7 +405,7 @@ function sparkSVG(vals, up) {
   const lo = Math.min(...vals), hi = Math.max(...vals), sp = hi - lo || 1;
   const pl = document.createElementNS(ns, "polyline");
   pl.setAttribute("points", vals.map((v, i) => (2 + i * 52 / (vals.length - 1)).toFixed(1) + "," + (hi === lo ? 11 : 19 - (v - lo) / sp * 16).toFixed(1)).join(" "));
-  pl.setAttribute("fill", "none"); pl.setAttribute("stroke", up ? "var(--ok)" : "var(--warn)"); pl.setAttribute("stroke-width", "2.2"); pl.setAttribute("stroke-linecap", "round"); pl.setAttribute("stroke-linejoin", "round");
+  pl.setAttribute("fill", "none"); pl.setAttribute("stroke", typeof up === "string" ? up : up ? "var(--ok)" : "var(--warn)"); pl.setAttribute("stroke-width", "2.2"); pl.setAttribute("stroke-linecap", "round"); pl.setAttribute("stroke-linejoin", "round");
   svg.appendChild(pl); return svg;
 }
 const fmtBig = v => v >= 10000 ? trim(r1(v / 1000)) + "k" : String(Math.round(v));
@@ -664,7 +664,7 @@ function renderProgress() {
   box.appendChild(el("span", "small pfor", per === "all" ? (first ? "All time · since " + shortDate(first) : "All time") : PERIODS[per].replace(/^./, c => c.toUpperCase()) + " · since " + shortDate(from)));
   box.appendChild(weekCard(st));
   const imp = improvedCard(); box.appendChild(imp);
-  const stall = stalledCard(imp._names || []); if (stall) box.appendChild(stall);
+  const least = leastCard(imp._names || []); if (least) box.appendChild(least);
   box.appendChild(calCard());
   if (!all.length) box.appendChild(el("p", "small center", "Your numbers fill in here as you log sets in Training."));
 }
@@ -724,25 +724,21 @@ function improvedCard() {
   });
   return c;
 }
-// exercises you still do that haven't improved in their last 3 sessions
-function stalledCard(skip) {
-  const inPlan = new Set(days.flatMap(d => namesFor(d))), today = new Date(), out = [];
-  inPlan.forEach(ex => {
-    if (skip.includes(ex)) return;
-    const p = perSession(allSets().filter(s => s.ex === ex)); if (p.length < 4) return;
-    const [y, m, d] = p[p.length - 1].date.split("-").map(Number); if ((today - new Date(y, m - 1, d)) / 86400e3 > 42) return;
-    const recent = Math.max(...p.slice(-3).map(x => x.est)), before = Math.max(...p.slice(0, -3).map(x => x.est));
-    if (recent > before + 0.01) return;
-    const bi = p.findIndex(x => x.est >= before - 0.01), [by, bm, bd] = p[bi].date.split("-").map(Number);
-    const weeks = Math.floor((today - new Date(by, bm - 1, bd)) / (7 * 86400e3));
-    if (weeks >= 3) out.push({ ex, p, weeks });
-  });
-  if (!out.length) return null;
-  const c = el("div", "card plist stalled"); c.appendChild(el("span", "lbl", "Needs attention · stalled"));
-  out.sort((a, b) => b.weeks - a.weeks).slice(0, 4).forEach(r => {
-    const b = el("button", "prow"); b.type = "button"; b.setAttribute("aria-label", r.ex + ", no progress for " + r.weeks + " weeks. Open in History");
-    const nm = el("span", "pname"); nm.append(document.createTextNode(r.ex), el("small", null, "No progress for " + r.weeks + " weeks"));
-    b.append(nm, sparkSVG(r.p.slice(-8).map(x => x.est), false), el("b", "hpct flat", "0%"));
+// the 3 exercises you still do that changed least (or went down) over the last 3 months
+function leastCard(skip) {
+  const from = rangeFrom("3M"), today = new Date(), inPlan = new Set(days.flatMap(d => namesFor(d)));
+  const rows = [...inPlan].filter(ex => !skip.includes(ex)).map(ex => {
+    const p = perSession(allSets().filter(s => s.ex === ex)).filter(x => x.date >= from); if (p.length < 2) return null;
+    const [y, m, d] = p[p.length - 1].date.split("-").map(Number); if ((today - new Date(y, m - 1, d)) / 86400e3 > 42) return null;
+    return { ex, p, pc: pctChange(p[0].est, p[p.length - 1].est) };
+  }).filter(r => r && r.pc != null).sort((a, b) => a.pc - b.pc).slice(0, 3);
+  if (!rows.length) return null;
+  const c = el("div", "card plist stalled"); c.appendChild(el("span", "lbl", "Least improved · last 3 months"));
+  rows.forEach(r => {
+    const col = r.pc < 0 ? "var(--danger)" : r.pc === 0 ? "var(--warn)" : "var(--muted)";
+    const b = el("button", "prow"); b.type = "button"; b.setAttribute("aria-label", r.ex + ", " + (r.pc > 0 ? "up " : r.pc < 0 ? "down " : "") + Math.abs(r.pc) + "%. Open in History");
+    const pct = el("b", "hpct", (r.pc > 0 ? "+" : r.pc < 0 ? "−" : "") + Math.abs(r.pc) + "%"); pct.style.color = col;
+    b.append(el("span", "pname", r.ex), sparkSVG(r.p.map(x => x.est).slice(-12), col), pct);
     b.onclick = () => openInHistory(r.ex); c.appendChild(b);
   });
   c.appendChild(el("span", "small", "Try adding 1 rep each session, a small weight jump, or drop about 10% and build back up."));
@@ -1355,7 +1351,7 @@ const TOUR = [
   { tab: "training", sel: "#todayBox", t: "Today so far", p: "Your sets for today appear here. Saved one by mistake? Tap it, then Remove set." },
   { tab: "training", sel: ".datewrap", t: "Logging another day?", p: "Tap the date to log or view sets on a different day, e.g. if you forgot to log yesterday." },
   { tab: "history", sel: "#history .ex-card", t: "History", p: "Every exercise with its trend. Tap one for a detailed chart (heaviest set, estimated max or volume), pick 1M to All, see every session, rename it or remove it." },
-  { tab: "progress", sel: "#progBody .wkcard", t: "Progress", p: "Your week, month or year at a glance: workouts, sets, kg lifted and personal bests. The ring shows this week against your target, then your most improved and stalled exercises and a calendar of training days." },
+  { tab: "progress", sel: "#progBody .wkcard", t: "Progress", p: "Your week, month or year at a glance: workouts, sets, kg lifted and personal bests. The ring shows this week against your target, then your most and least improved exercises and a calendar of training days." },
   { tab: "group", sel: "#grp", t: "Group", p: "Make a private group with friends from your gym, vote in the exercises you all do, and see who lifts the heaviest. Your Training sets count automatically." },
   { tab: "body", sel: "#meTop .rkmapcard", t: "Me: your muscle ranks", p: "Every muscle earns a rank, from Bronze to Diamond, by training it and beating your records. Tap ? to see how it works. Your weigh-ins and goal weight are further down." },
   { tab: "training", sel: "#chatBub", round: true, t: "Ask the coach", p: "Tap HELP to ask the AI coach about training, food, sleep, motivation or how to use the app. Press and hold it to move it out of the way." },
@@ -1476,10 +1472,10 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Workout days (add, rename, reorder, remove): Settings → Workout days & exercises.
 - Settings → Training: units kg/lbs, rest timer on/off and length, weekly session target, keep screen on, celebrations on/off. Settings → Colours: Auto (follows the phone), Light, Dark and Golden, plus "+ New" to make your own theme (pick background, panels, text and button colours). Settings → Your data: Export to Excel, import sets from Excel. Settings → Help: replay the guided tour. Settings → Account: sign out, privacy policy, and Delete account (type DELETE to confirm; it permanently removes your account and all your data). Settings also has the muscle map figure (male or female).
 - Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
-- Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
+- Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises: search or pick a workout day, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
 - Me tab: your level, a muscle map (front/back, male or female figure, chosen in Settings) where each of 9 muscles (Chest, Back, Shoulders, Biceps, Triceps, Core, Quads, Hamstrings & glutes, Calves) has a rank: Bronze, Silver, Gold, Platinum, Diamond (each with steps I, II, III), then Legend. Points: +10 per day you do at least 2 sets for that muscle (max 3 days a week); a personal best (estimated 1-rep max, after the first 2 sessions of an exercise as baseline) gives 3 points per 1% stronger (3 to 15, max one per exercise per week). 14 days without training a muscle drops it one step, then one more step per extra week (never below Bronze I); double points while climbing back. Legend also needs 40 of the last 52 weeks trained. The ? button explains it; tap a muscle for details; 'Which muscle each exercise counts for' sets the muscle of your own exercises. Weigh-ins and goal weight are lower on the Me tab. Group members can see each other's muscle maps.
 - History tab: one row per exercise with a trend line and % change. Tap one to open a detailed chart (kg up the side, dates along the bottom; tap a point to see that session), switch between Heaviest set, Est. 1-rep max and Total volume, and pick 1M, 3M, 6M, 1Y or All, which also filters the numbers and the sessions list. Rename or Remove is at the bottom of the open exercise. Each row says when you last did it (Today, Yesterday, the weekday this week, or the date).
-- Progress tab: an overview with Week/Month/Year/All: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target and the streak; Most improved (last 3 months); Needs attention (stalled exercises); and a month calendar of training days. Tap a day in the "This week" row to see which workout you did that day (Push, Pull…) or Rest.
+- Progress tab: an overview with Week/Month/Year/All: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target and the streak; Most improved (last 3 months); Least improved (the 3 exercises with the smallest change or that went down over the last 3 months); and a month calendar of training days. Tap a day in the "This week" row to see which workout you did that day (Push, Pull…) or Rest.
 - Body weight: on the Me tab, below the muscle map: log your weight, see the 7-day average, weekly rate and goal weight.
 - Coach answers have a 🚩 Report button if an answer is wrong or inappropriate.
 - Wrong day: remove the set, change the date at the top right, save it again.
@@ -2153,7 +2149,7 @@ const G_MAX = 12, G_PER = 3, G_VOTE_DAYS = 7, G_JUMP = 1.3, G_EX_MAX = 40;
 const G_COLORS = ["#ff6a33", "#5bc0eb", "#3fc27a", "#c792ea", "#f5c542", "#e86a92", "#4dd0c4", "#ffa94d", "#8fa1ff", "#b5e550", "#ff8a80", "#a1887f"];
 let groups = {};                                   // gid -> { d: group doc, b: best sets by member uid }
 let gUI = { view: "group", gid: mem.get("gid") || null, ex: null };
-let gLoading = false, gAgain = false, gSyncTimer = null, gFromSet = 0, gOpenVote = null, gProposing = false, gPick = new Set();
+let gLoading = false, gAgain = false, gSyncTimer = null, gFromSet = 0, gOpenVote = null, gProposing = false, gPick = new Set(), gFind = { q: "", d: "" };
 const myGroups = () => (Array.isArray(prefs.groups) ? prefs.groups : []).filter(x => typeof x === "string");
 const newId = n => Array.from({ length: n }, () => "abcdefghijkmnpqrstuvwxyz23456789"[Math.floor(Math.random() * 32)]).join("");
 const gMemberName = (g, u) => ((g.members || {})[u] || {}).name || "A member";
@@ -2578,7 +2574,7 @@ function gVotesView(box, G) {
   const active = Object.values(g.ex || {}).filter(x => x.status === "pending" || x.status === "ranked");
   const used = active.map(x => (x.links || {})[uid]).filter(Boolean);
   if (!knownNames().length) return;
-  if (!gProposing) { box.appendChild(gBtn("save", "+ Propose exercises", () => { gProposing = true; gPick = new Set(); renderGroup(); })); return; }
+  if (!gProposing) { box.appendChild(gBtn("save", "+ Propose exercises", () => { gProposing = true; gPick = new Set(); gFind = { q: "", d: "" }; renderGroup(); })); return; }
   // tick as many as you like, grouped by workout day
   const c = el("div", "card gpropose");
   c.append(el("b", null, "Propose exercises"), el("p", "muted", "Tick as many of yours as you like. Everyone else links their own version when they vote, so names don't have to match."));
@@ -2588,16 +2584,34 @@ function gVotesView(box, G) {
   const rest = knownNames().filter(n => !seenN.has(n)); if (rest.length) groupsOf.push(["Other exercises", rest]);
   const free = n => !used.includes(n) && !taken(n);
   if (!groupsOf.some(([, l]) => l.some(free))) { c.appendChild(el("p", "small", "All your exercises are already ranked or in a vote.")); c.appendChild(gBtn("use", "Close", () => { gProposing = false; renderGroup(); })); box.appendChild(c); return; }
+  // search + workout-day filter: hides rows in place so typing keeps the keyboard open
+  const fbox = el("div", "gfilter"), sIn = el("input"); sIn.type = "search"; sIn.id = "gSearch"; sIn.placeholder = "Search your exercises"; sIn.setAttribute("aria-label", "Search your exercises"); sIn.value = gFind.q;
+  const sw = el("div", "gsearch"); sw.append(el("span", "gsicon", "🔍"), sIn); fbox.appendChild(sw);
+  const chipsRow = el("div", "gdayf"); chipsRow.setAttribute("role", "group"); chipsRow.setAttribute("aria-label", "Show workout day");
+  [["", "All"], ...groupsOf.map(([d]) => [d, d])].forEach(([k, n]) => { const b = el("button", null, n); b.type = "button"; b.dataset.k = k; b.setAttribute("aria-pressed", String(gFind.d === k)); b.onclick = () => { gFind.d = k; chipsRow.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.k === k))); applyF(); }; chipsRow.appendChild(b); });
+  if (groupsOf.length > 1) fbox.appendChild(chipsRow); else gFind.d = "";
+  c.appendChild(fbox);
+  const none = el("p", "small gnone", "No exercises match."); none.hidden = true;
+  const applyF = () => {
+    const q = squash(gFind.q || ""); let any = false;
+    c.querySelectorAll(".gphd").forEach(h => {
+      const okDay = !gFind.d || h.dataset.d === gFind.d; let vis = false;
+      c.querySelectorAll('.gpick[data-d="' + CSS.escape(h.dataset.d) + '"]').forEach(r => { const on = okDay && (!q || squash(r.dataset.n).includes(q)); r.hidden = !on; if (on) vis = true; });
+      h.hidden = !vis; if (vis) any = true;
+    });
+    none.hidden = any;
+  };
+  sIn.oninput = () => { gFind.q = sIn.value; applyF(); };
   const go = gBtn("save", "", () => {});
   const sync = () => { go.textContent = gPick.size ? "Propose " + gPick.size + " exercise" + (gPick.size === 1 ? "" : "s") : "Tick exercises to propose"; go.disabled = !gPick.size; };
   groupsOf.forEach(([d, l]) => {
-    const hd = el("div", "gphd"); hd.appendChild(el("span", "gk", d));
+    const hd = el("div", "gphd"); hd.dataset.d = d; hd.appendChild(el("span", "gk", d));
     const can = l.filter(free);
     if (can.length > 1) { const all = gBtn("glink", can.every(n => gPick.has(n)) ? "Clear" : "Select all", () => { const on = can.every(n => gPick.has(n)); can.forEach(n => on ? gPick.delete(n) : gPick.add(n)); renderGroup(); }); hd.appendChild(all); }
     c.appendChild(hd);
     l.forEach(n => {
       if (used.includes(n)) return;                       // already linked by me: nothing to propose
-      const t = taken(n), row = el("label", "gpick" + (t ? " off" : ""));
+      const t = taken(n), row = el("label", "gpick" + (t ? " off" : "")); row.dataset.d = d; row.dataset.n = n;
       const cb = el("input"); cb.type = "checkbox"; cb.checked = gPick.has(n); cb.disabled = !!t;
       cb.onchange = () => { cb.checked ? gPick.add(n) : gPick.delete(n); sync(); };
       const tx = el("span", "gxn"); tx.appendChild(el("b", null, n));
@@ -2605,6 +2619,7 @@ function gVotesView(box, G) {
       row.append(cb, tx); c.appendChild(row);
     });
   });
+  c.appendChild(none); applyF();
   const msg = el("p", "small gmsg"); c.appendChild(msg);
   go.onclick = async () => {
     const names = [...gPick].filter(free); if (!names.length) return;
