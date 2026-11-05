@@ -633,9 +633,9 @@ function stat(value, label, cls) { const s = el("div", "stat"), b = el("b", cls 
 /* ---------- progress: an overview of all your training ---------- */
 function renderProgress() {
   const box = $("progBody"); box.innerHTML = "";
-  const per = ["week", "month", "year"].includes(mem.get("pPer")) ? mem.get("pPer") : "month";
+  const per = ["week", "month", "year", "all"].includes(mem.get("pPer")) ? mem.get("pPer") : "month";
   const head = el("div", "phead"); head.appendChild(el("h2", null, "Your progress"));
-  head.appendChild(hSeg([["week", "Week"], ["month", "Month"], ["year", "Year"]], per, k => { mem.set("pPer", k); renderProgress(); }, "Period"));
+  head.appendChild(hSeg([["week", "Week"], ["month", "Month"], ["year", "Year"], ["all", "All"]], per, k => { mem.set("pPer", k); renderProgress(); }, "Period"));
   box.appendChild(head);
   // 4 numbers for the period
   const from = periodStart(per), today = todayISO(), all = working(allSets()), inP = all.filter(s => s.date >= from && s.date <= today);
@@ -645,7 +645,8 @@ function renderProgress() {
   grid.append(card(workouts, workouts === 1 ? "workout" : "workouts"), card(inP.length, inP.length === 1 ? "set" : "sets"),
     card(U() === "kg" ? trim(r1(vol / 1000)) + " t" : fmtBig(vol) + " lbs", "lifted"), card(pbs, (pbs === 1 ? "personal best" : "personal bests") + " 🏆", "gold"));
   box.appendChild(grid);
-  box.appendChild(el("span", "small pfor", PERIODS[per].replace(/^./, c => c.toUpperCase()) + " · since " + shortDate(from)));
+  const first = all.map(s => s.date).sort()[0];
+  box.appendChild(el("span", "small pfor", per === "all" ? (first ? "All time · since " + shortDate(first) : "All time") : PERIODS[per].replace(/^./, c => c.toUpperCase()) + " · since " + shortDate(from)));
   box.appendChild(weekCard(st));
   const imp = improvedCard(); box.appendChild(imp);
   const stall = stalledCard(imp._names || []); if (stall) box.appendChild(stall);
@@ -1456,7 +1457,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
 - Me tab: your level, a muscle map (front/back, male or female figure, chosen in Settings) where each of 9 muscles (Chest, Back, Shoulders, Biceps, Triceps, Core, Quads, Hamstrings & glutes, Calves) has a rank: Bronze, Silver, Gold, Platinum, Diamond (each with steps I, II, III), then Legend. Points: +10 per day you do at least 2 sets for that muscle (max 3 days a week); a personal best (estimated 1-rep max, after the first 2 sessions of an exercise as baseline) gives 3 points per 1% stronger (3 to 15, max one per exercise per week). 14 days without training a muscle drops it one step, then one more step per extra week (never below Bronze I); double points while climbing back. Legend also needs 40 of the last 52 weeks trained. The ? button explains it; tap a muscle for details; 'Which muscle each exercise counts for' sets the muscle of your own exercises. Weigh-ins and goal weight are lower on the Me tab. Group members can see each other's muscle maps.
 - History tab: one row per exercise with a trend line and % change. Tap one to open a detailed chart (kg up the side, dates along the bottom; tap a point to see that session), switch between Heaviest set, Est. 1-rep max and Total volume, and pick 1M, 3M, 6M, 1Y or All, which also filters the numbers and the sessions list. Rename or Remove is at the bottom of the open exercise.
-- Progress tab: an overview with Week/Month/Year: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target with the last 8 weeks (✓ = target hit) and the streak; Most improved (last 3 months); Needs attention (stalled exercises); and a month calendar of training days.
+- Progress tab: an overview with Week/Month/Year/All: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target with the last 8 weeks (✓ = target hit) and the streak; Most improved (last 3 months); Needs attention (stalled exercises); and a month calendar of training days.
 - Body tab: log body weight, 7-day average, weekly rate, goal weight.
 - Wrong day: remove the set, change the date at the top right, save it again.
 - Sync: sign in with the same Google account on any phone; works offline at the gym and syncs later. Each person's data is private.
