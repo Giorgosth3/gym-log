@@ -371,6 +371,16 @@ svg.ring{width:110px;height:110px;flex-shrink:0}
 .plist.stalled{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
 .plist.stalled>.lbl{color:var(--warn)}
 .calcard{display:flex;flex-direction:column;gap:8px}
+.wkdays{position:relative;transition:margin-top .15s ease}
+.wkdays.bubbled{margin-top:30px}
+.wkdays button{flex:1;text-align:center;padding:6px 0;border-radius:7px;font:600 .7rem var(--body);background:var(--chip);color:var(--muted);border:0;cursor:pointer}
+.wkdays button.on{background:var(--ok);color:var(--bg)}
+.wkdays button.today{background:transparent;outline:2px solid var(--accent);outline-offset:-2px;color:var(--ink)}
+.wkdays .sel{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--ink)}
+.wkbub{position:absolute;bottom:calc(100% + 8px);transform:translateX(-50%);background:var(--ink);color:var(--surface);font:700 .78rem var(--body);line-height:1.2;padding:5px 10px;border-radius:8px;white-space:nowrap;pointer-events:none;z-index:2}
+.wkbub::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink)}
+.wkbub.first{transform:translateX(-22%)}.wkbub.first::after{left:22%}
+.wkbub.last{transform:translateX(-78%)}.wkbub.last::after{left:78%}
 #dayBtns button.hasdate{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;gap:1px}
 #dayBtns .dlast{font:500 .68rem var(--body);opacity:.8;white-space:nowrap}
 .cal span.later{opacity:.45}

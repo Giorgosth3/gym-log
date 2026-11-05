@@ -668,6 +668,7 @@ function renderProgress() {
   box.appendChild(calCard());
   if (!all.length) box.appendChild(el("p", "small center", "Your numbers fill in here as you log sets in Training."));
 }
+let wkSel = null;
 // this week against the weekly target: a ring, the 7 days
 function weekCard(st) {
   const T = st.T, n = st.thisCount, c = el("div", "card wkcard");
@@ -682,10 +683,23 @@ function weekCard(st) {
   const right = el("div", "wkright"), left = T - n;
   right.appendChild(el("b", "wkmsg", n >= T ? "Target hit this week! 💪" : left + " more to hit your target"));
   const row = el("div", "wkdays");
+  // tap a day: a small bubble above it says which workout you did (Push, Pull…) or Rest
+  const show = (btn, iso, i) => {
+    row.querySelectorAll(".wkbub").forEach(x => x.remove()); row.querySelectorAll(".sel").forEach(x => x.classList.remove("sel"));
+    if (wkSel === iso) { wkSel = null; row.classList.remove("bubbled"); return; }
+    wkSel = iso; btn.classList.add("sel"); row.classList.add("bubbled");
+    const ss = (sessions[iso] || {}).sets || [], names = [...new Set(ss.map(x => x.day).filter(Boolean))];
+    const bb = el("div", "wkbub", names.length ? names.join(" + ") : ss.length ? "Workout" : "Rest"); bb.setAttribute("role", "status");
+    bb.style.left = ((i + .5) / 7 * 100) + "%"; if (i === 0) bb.classList.add("first"); if (i === 6) bb.classList.add("last");
+    row.appendChild(bb);
+  };
   ["M", "T", "W", "T", "F", "S", "S"].forEach((d, i) => {
-    const x = new Date(st.thisMon); x.setDate(x.getDate() + i); const iso = isoOf(x);
-    const s = el("span", st.wd.has(iso) ? "on" : iso === todayISO() ? "today" : iso > todayISO() ? "later" : null, d);
-    s.setAttribute("aria-label", dayName(iso) + (st.wd.has(iso) ? ", trained" : "")); row.appendChild(s);
+    const x = new Date(st.thisMon); x.setDate(x.getDate() + i); const iso = isoOf(x), fut = iso > todayISO();
+    const s = el(fut ? "span" : "button", st.wd.has(iso) ? "on" : iso === todayISO() ? "today" : fut ? "later" : null, d);
+    s.setAttribute("aria-label", dayName(iso) + (st.wd.has(iso) ? ", trained" : "") + (fut ? "" : ". Tap to see which workout"));
+    if (!fut) { s.type = "button"; s.onclick = () => show(s, iso, i); }
+    row.appendChild(s);
+    if (wkSel === iso && !fut) { wkSel = null; setTimeout(() => show(s, iso, i)); }
   });
   right.appendChild(row);
   right.appendChild(el("span", "small", st.streak > 0 ? (n >= T ? "Streak extended to " + st.streak + " weeks." : "Hit it to make it " + (st.prev + 1) + " weeks in a row.") : "Hit it to start a streak."));
@@ -1462,7 +1476,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
 - Me tab: your level, a muscle map (front/back, male or female figure, chosen in Settings) where each of 9 muscles (Chest, Back, Shoulders, Biceps, Triceps, Core, Quads, Hamstrings & glutes, Calves) has a rank: Bronze, Silver, Gold, Platinum, Diamond (each with steps I, II, III), then Legend. Points: +10 per day you do at least 2 sets for that muscle (max 3 days a week); a personal best (estimated 1-rep max, after the first 2 sessions of an exercise as baseline) gives 3 points per 1% stronger (3 to 15, max one per exercise per week). 14 days without training a muscle drops it one step, then one more step per extra week (never below Bronze I); double points while climbing back. Legend also needs 40 of the last 52 weeks trained. The ? button explains it; tap a muscle for details; 'Which muscle each exercise counts for' sets the muscle of your own exercises. Weigh-ins and goal weight are lower on the Me tab. Group members can see each other's muscle maps.
 - History tab: one row per exercise with a trend line and % change. Tap one to open a detailed chart (kg up the side, dates along the bottom; tap a point to see that session), switch between Heaviest set, Est. 1-rep max and Total volume, and pick 1M, 3M, 6M, 1Y or All, which also filters the numbers and the sessions list. Rename or Remove is at the bottom of the open exercise. Each row says when you last did it (Today, Yesterday, the weekday this week, or the date).
-- Progress tab: an overview with Week/Month/Year/All: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target and the streak; Most improved (last 3 months); Needs attention (stalled exercises); and a month calendar of training days.
+- Progress tab: an overview with Week/Month/Year/All: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target and the streak; Most improved (last 3 months); Needs attention (stalled exercises); and a month calendar of training days. Tap a day in the "This week" row to see which workout you did that day (Push, Pull…) or Rest.
 - Body weight: on the Me tab, below the muscle map: log your weight, see the 7-day average, weekly rate and goal weight.
 - Coach answers have a 🚩 Report button if an answer is wrong or inappropriate.
 - Wrong day: remove the set, change the date at the top right, save it again.
