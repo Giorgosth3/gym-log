@@ -1856,7 +1856,7 @@ function renderThemes() {
   });
   const curName = (BUILTIN.find(x => x[0] === cur) || [])[1] || (customThemes().find(x => "custom:" + x.id === cur) || {}).name || "Auto";
   $("sumCol").textContent = curName;
-  const nb = el("button", "newth", "+ New theme"); nb.onclick = () => openThemeEdit(null); grid.appendChild(nb);
+  const nb = el("button", "newth", "+ New"); nb.setAttribute("aria-label", "New theme"); nb.onclick = () => openThemeEdit(null); grid.appendChild(nb);
   // edit / delete for the selected custom theme
   const tools = $("themeTools"); tools.innerHTML = "";
   const sel = customThemes().find(x => "custom:" + x.id === cur);

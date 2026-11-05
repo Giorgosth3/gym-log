@@ -57,7 +57,8 @@
   --accent:#0a1d4a; --accent-ink:#ffd200; --ok:#0a1d4a; --chip:#ffe680; --danger:#b3261e; --warn:#8a4b00;
   --pressed:#0a1d4a; --pressed-ink:#ffd200; color-scheme:light}
 .theme-row{display:flex;flex-direction:column;gap:8px}
-.theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-items:start}
+.theme-grid button{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:42px;line-height:1}
 .theme-grid button{min-width:0;font:600 .9rem var(--body);padding:9px 4px;border-radius:999px;
   border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer}
 .theme-grid button[aria-pressed="true"]{background:var(--pressed);color:var(--pressed-ink);border-color:var(--pressed)}
