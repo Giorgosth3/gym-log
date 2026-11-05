@@ -1665,11 +1665,12 @@ function bubColors() {
   let bub = ink; if (contrast(bub, bg) < 3) bub = contrast(acc, bg) >= 3 ? acc : bw(bg);
   const fg = contrast(bg, bub) >= 3 ? bg : bw(bub);
   // tag: accent if it stands out from both the bubble and the page, otherwise page colour on the bubble
-  let tag = acc, tagInk = accInk;
-  if (contrast(acc, bub) < 1.6) { tag = contrast(bg, bub) >= 1.6 ? bg : bw(bub); tagInk = contrast(ink, tag) >= 3 ? ink : bw(tag); }
+  let tag = acc, tagInk = accInk, tagEdge = bg;
+  // accent blends into the bubble (e.g. Golden): white tag outlined and lettered in the bubble colour
+  if (contrast(acc, bub) < 1.6) { tag = "#ffffff"; tagInk = contrast(bub, "#ffffff") >= 3 ? bub : "#111111"; tagEdge = tagInk; }
   if (contrast(tagInk, tag) < 3) tagInk = bw(tag);
   const r = document.documentElement.style;
-  r.setProperty("--bub-bg", bub); r.setProperty("--bub-fg", fg); r.setProperty("--bub-tag", tag); r.setProperty("--bub-tag-ink", tagInk);
+  r.setProperty("--bub-bg", bub); r.setProperty("--bub-fg", fg); r.setProperty("--bub-tag", tag); r.setProperty("--bub-tag-ink", tagInk); r.setProperty("--bub-tag-edge", tagEdge);
   // chat: outline your own messages / send button if the accent blends into the background
   r.setProperty("--me-border", contrast(acc, bg) < 1.6 ? ink : acc);
   const send = contrast(acc, sur) >= 1.6 ? acc : ink; r.setProperty("--send-bg", send); r.setProperty("--send-ink", send === acc ? accInk : bw(send));
