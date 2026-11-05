@@ -333,8 +333,9 @@ svg.dchart{display:block;width:100%;height:auto;cursor:pointer;touch-action:mani
 /* progress overview */
 #progBody{display:flex;flex-direction:column;gap:10px}
 .phead{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.phead h2{font-size:1.5rem}
-.phead .seg{width:190px;flex-shrink:0}
+.phead h2{font-size:1.3rem;white-space:nowrap}
+.phead .seg{flex:1;max-width:230px;gap:4px}
+.phead .seg button{padding:7px 0;font-size:.78rem}
 .pstats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pstat{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px;text-align:center}
 .pstat b{font:700 1.5rem var(--num)}
@@ -349,13 +350,13 @@ svg.ring{width:110px;height:110px;flex-shrink:0}
 .wkright .small{color:var(--muted)}
 .wkdays{display:flex;gap:4px}
 .wkdays span{flex:1;text-align:center;padding:6px 0;border-radius:7px;font:600 .7rem var(--body);background:var(--chip);color:var(--muted)}
-.wkdays span.on{background:var(--ok);color:#0d1f15}
+.wkdays span.on{background:var(--ok);color:var(--bg)}
 .wkdays span.today{background:transparent;outline:2px solid var(--accent);outline-offset:-2px;color:var(--ink)}
 .wkdays span.later{opacity:.5}
 .wkpast{display:flex;gap:6px}
 .wkpast div{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
 .wkpast b{width:100%;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font:700 .75rem var(--num)}
-.wkpast b.hit{background:var(--ok);color:#0d1f15}
+.wkpast b.hit{background:var(--ok);color:var(--bg)}
 .wkpast b.miss{background:color-mix(in srgb,var(--warn) 18%,var(--surface));color:var(--warn)}
 .wkpast b.now{border:2px dashed var(--accent);color:var(--accent)}
 .wkpast span{font:500 .62rem var(--num);color:var(--muted)}
