@@ -210,7 +210,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;background:transparent;border:0;color:var(--muted);
   font:600 .8rem var(--body);padding:6px 2px;cursor:pointer;border-radius:10px}
 .tabbar button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.tabbar button[aria-current="page"]{color:var(--accent)}
+.tabbar button{border-radius:14px;margin:0 3px;padding:6px 0}
+.tabbar button[aria-current="page"]{background:var(--pressed);color:var(--pressed-ink)}
 .tabbar .temo{font:600 1.35rem/24px var(--body);height:24px;display:block}
 .tabbar-inner{max-width:520px}
 /* floating message */
