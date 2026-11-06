@@ -392,6 +392,28 @@ svg.ring{width:110px;height:110px;flex-shrink:0}
 .gdayf button[aria-pressed="true"]{background:var(--pressed);color:var(--pressed-ink);border-color:var(--pressed)}
 .gpick[hidden],.gphd[hidden]{display:none!important}
 .gnone{color:var(--muted);text-align:center}
+/* press-and-hold edit panel */
+#editSheet .addpanel{top:auto;max-height:calc(100dvh - 40px)}
+#editSheet .addbody{display:flex;flex-direction:column;gap:8px;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+#editSub{color:var(--muted)}
+#editSheet .addhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+#editSheet .addhead>div{flex:1;min-width:0}
+.edact{display:flex;align-items:center;gap:12px;padding:13px 14px;font-size:1rem;text-align:left;justify-content:flex-start}
+.edact.dng{color:var(--danger)}
+.edact:disabled{opacity:.45}
+.edi{width:22px;text-align:center}
+.edcancel{background:transparent;border-color:transparent;color:var(--muted);padding:10px}
+.edq{margin:0 2px 2px;color:var(--ink)}
+.edinp{width:100%;box-sizing:border-box;font:500 1.05rem var(--body);padding:12px;border-radius:12px;border:2px solid var(--ink);background:var(--bg);color:var(--ink)}
+.edok{padding:12px;font-size:1rem}
+.edord{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.edord span{flex:1;font:600 1rem var(--body)}.edord span.cur{color:var(--accent)}
+.edord .use{padding:8px 14px}
+.edtip{color:var(--muted);margin:0 2px}
+.expb{flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;gap:3px;padding:4px 7px;border-radius:8px;background:color-mix(in srgb,#f5c542 30%,var(--surface));margin-left:auto}
+.expb b{font:700 .66rem var(--num);color:var(--ink)}
+.expbi{font-size:.72rem}
+.exrow .expb + .exgo{margin-left:0}
 #dayBtns button.hasdate{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;gap:1px}
 #dayBtns .dlast{font:500 .68rem var(--body);opacity:.8;white-space:nowrap}
 .cal span.later{opacity:.45}
@@ -1008,6 +1030,12 @@ body.touring .chatbub{z-index:19}
     <div class="addpanel"><div class="grab"></div>
       <div class="addhead"><h2 id="rkTitle"></h2><button class="icon-btn" id="rkClose" aria-label="Close">✕</button></div>
       <div class="addbody" id="rkBody"></div></div>
+  </div>
+  <div class="addsheet" id="editSheet" hidden role="dialog" aria-modal="true" aria-labelledby="editTitle">
+    <div class="adddim" id="editDim"></div>
+    <div class="addpanel"><div class="grab"></div>
+      <div class="addhead"><div><h2 id="editTitle"></h2><span class="small" id="editSub"></span></div><button class="icon-btn" id="editClose" aria-label="Close">✕</button></div>
+      <div class="addbody" id="editBody"></div></div>
   </div>
   <div class="plan" id="rkFull" hidden role="dialog" aria-modal="true" aria-label="Your muscle map">
     <div class="planpanel"><div class="planbody" id="rkFullBody"></div></div>

@@ -48,6 +48,8 @@ function allSets() { const out = []; Object.values(sessions).forEach(s => (s.set
 const working = sets => sets.filter(s => !s.wu);
 const e1rm = s => s.r <= 1 ? s.w : s.w * (1 + s.r / 30);   // Epley estimate of a 1-rep max
 function namesFor(d) { const n = exercisesFor(d); allSets().forEach(s => { if (s.day === d && !n.includes(s.ex)) n.push(s.ex); }); return n; }
+// Training: the day's plan, plus anything already logged on the date you're viewing
+function trainNames(d) { const n = exercisesFor(d), dt = (typeof $ === "function" && $("date") && $("date").value) || todayISO(); ((sessions[dt] || {}).sets || []).forEach(s => { if (s.day === d && !n.includes(s.ex)) n.push(s.ex); }); return n; }
 
 function toast(msg, err) {
   const t = $("toast"); t.textContent = msg; t.className = err ? "err" : "";
@@ -88,8 +90,8 @@ function renderAll() { renderDayBtns(); renderSelect(); renderUnits(); renderSet
 function renderSelect() {
   const sel = $("ex"), keep = mem.get("ex_" + day);
   sel.innerHTML = ""; const none = el("option", null, ""); none.value = ""; sel.appendChild(none);
-  namesFor(day).forEach(n => sel.appendChild(el("option", null, n)));
-  sel.value = keep && namesFor(day).includes(keep) ? keep : "";
+  trainNames(day).forEach(n => sel.appendChild(el("option", null, n)));
+  sel.value = keep && trainNames(day).includes(keep) ? keep : "";
   renderExercise(true);
 }
 // Everything on the logging card for the chosen exercise. prefill=true fills weight/reps.
@@ -148,7 +150,7 @@ function renderExGrid() {
   const lc = $("logCard"), pane = $("pane-training");
   if (grid.contains(lc)) pane.appendChild(lc);
   grid.innerHTML = "";
-  const names = namesFor(day), has = ex => todaySets(ex).length > 0;
+  const names = trainNames(day), has = ex => todaySets(ex).length > 0;
   // the open exercise stays where it was opened until you close it
   const inDone = ex => has(ex) && isFinished(ex);
   const next = names.filter(ex => !inDone(ex)), done = names.filter(ex => inDone(ex));
@@ -160,12 +162,16 @@ function renderExGrid() {
     txt.appendChild(el("span", null, ex));
     if (n.length) { const ch = el("small", "exdone"); ch.textContent = n.map(x => trim(disp(x.w)) + "×" + x.r).slice(0, 3).join("  ") + (n.length > 3 ? "  +" + (n.length - 3) : ""); txt.appendChild(ch); }
     else txt.appendChild(el("small", null, lastLine(ex)));
-    b.append(mark, txt, el("span", "exgo", open ? "⌃" : n.length ? n.length + " set" + (n.length > 1 ? "s" : "") : "⌄"));
-    b.setAttribute("aria-label", ex + (n.length ? ", " + n.length + " set" + (n.length > 1 ? "s" : "") + " today" : ", " + lastLine(ex)) + (open ? ". Tap to close" : ". Tap to log sets"));
+    const pbw = working(allSets().filter(x => x.ex === ex)), pb = pbw.length ? topOf(pbw) : null;
+    if (pb) { const bd = el("span", "expb"); bd.append(el("span", "expbi", "🏆"), el("b", null, fmtW(pb.w) + " × " + pb.r)); bd.setAttribute("aria-hidden", "true"); b.append(mark, txt, bd); }
+    else b.append(mark, txt);
+    b.appendChild(el("span", "exgo", open ? "⌃" : n.length ? n.length + " set" + (n.length > 1 ? "s" : "") : "⌄"));
+    b.setAttribute("aria-label", ex + (n.length ? ", " + n.length + " set" + (n.length > 1 ? "s" : "") + " today" : ", " + lastLine(ex)) + (pb ? ", personal best " + fmtW(pb.w) + " × " + pb.r : "") + (open ? ". Tap to close" : ". Tap to log sets"));
     b.onclick = () => { if (dragJustEnded) { dragJustEnded = false; return; } pickEx(ex); };
     wrap.appendChild(b); if (open) wrap.appendChild(lc);
     return wrap;
   };
+  if (!mem.get("editTip") && names.length) grid.appendChild(el("p", "small edtip", "Tip: press and hold an exercise or a day to edit it."));
   if (next.length) grid.appendChild(el("div", "exsec", "Up next"));
   next.forEach(ex => grid.appendChild(item(ex)));
   const add = el("button", "exb add", "+ Add exercise"); add.type = "button"; add.onclick = () => openAdd(day); grid.appendChild(add);
@@ -1344,8 +1350,8 @@ function askConfirm(title, text, ok, cancel, card) {
 let tourPending = false, tour = null;
 const TOUR = [
   { tab: "training", k: "Welcome 👋", t: "Quick tour?", p: "STEPS short steps, about a minute, showing every part of the app. You can replay it any time in Settings → Help.", btn: "Show me", skip: "Skip" },
-  { tab: "training", sel: "#dayBtns", t: "Your workout days", p: "Pick today's workout day. You can rename days, add your own or switch to another plan any time in Settings." },
-  { tab: "training", sel: "#exGrid", t: "Your workout", p: "Tap an exercise to open it and log sets; tap it again to close it. Tap ✓ Finish exercise when you're done with it and it moves to Done today. Hold and drag to reorder; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
+  { tab: "training", sel: "#dayBtns", t: "Your workout days", p: "Pick today's workout day. Each shows when you last did it. Press and hold a day to rename it, reorder your days, add a new one or remove it." },
+  { tab: "training", sel: "#exGrid", t: "Your workout", p: "Tap an exercise to open it and log sets; tap it again to close it. The gold 🏆 badge shows your best set. Tap ✓ Finish exercise when you're done with it and it moves to Done today. Hold and drag to reorder, or hold and let go to rename, move, copy or remove it; \"+ Add exercise\" searches 130+ exercises or takes your own name." },
   { tab: "training", sel: "#logCard .pair", t: "Weight and reps", p: "Set 1 is filled in from set 1 last time, so you can match or beat it. Set 2 copies the set you just did. Adjust with − and +." },
   { tab: "training", sel: "#save", t: "Save the set", p: "Tap Save set. A rest timer starts at the top. Tap it for +30s or Skip. Beat your best and you'll get a personal-best celebration 🏆" },
   { tab: "training", sel: "#todayBox", t: "Today so far", p: "Your sets for today appear here. Saved one by mistake? Tap it, then Remove set." },
@@ -1377,7 +1383,7 @@ function startTour() {
 function tourPrep(st) {
   if (tab !== st.tab) setTab(st.tab);
   if (st.pview) { const b = document.querySelector('[data-pview="' + st.pview + '"]'); if (b && b.getAttribute("aria-pressed") !== "true") b.click(); }
-  if (st.tab === "training" && !$("ex").value && namesFor(day).length) pickEx(namesFor(day)[0]);
+  if (st.tab === "training" && !$("ex").value && trainNames(day).length) pickEx(trainNames(day)[0]);
 }
 function tourStep(i) {
   if (!tour) return;
@@ -1445,6 +1451,7 @@ const layerClosers = {
   del: () => { if (!deleting) { $("delFull").hidden = true; document.body.classList.remove("menu-open"); } },
   rkf: () => { if (rkFlow) { rkFlow = null; $("rkFull").hidden = true; document.body.classList.remove("menu-open"); } },
   date: () => { $("dpick").hidden = true; },
+  edit: () => reallyCloseEdit(),
   grp: () => { if (typeof gUI !== "undefined" && !["group", "home"].includes(gUI.view)) { gUI.view = "group"; gOpenVote = null; gProposing = false; if (tab === "group") renderGroup(); } }
 };
 let ignorePop = 0;
@@ -1461,10 +1468,12 @@ const CHAT_DAILY = 40;           // questions per person per day
 const CHAT_KEEP = 12;            // earlier messages sent along for context
 const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; never invent buttons that are not listed here):
 - Top bar: menu button (☰) opens Settings; the date button (top right) picks the day you're logging (future days can't be picked); the round HELP button (bottom right, press and hold to move it) opens this coach. After saving a set, a rest timer appears at the top: tap it for +30s or Skip.
-- Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders). Each shows when you last did that workout (Today, Yesterday, the weekday this week, or the date).
+- Under the top bar: workout day buttons (e.g. Push, Pull, Legs, Shoulders). Press and hold a day button to rename it, change the order of days, add a new day or remove it. Each shows when you last did that workout (Today, Yesterday, the weekday this week, or the date).
 - Bottom tabs: Training, History, Progress, Group, Me.
 - Training tab: a list for the chosen day: \"Up next\" (exercises not done yet), \"+ Add exercise\", and \"Done today\". Tap an exercise to open its logger in place, tap it again to close it. After at least one set, \"✓ Finish exercise\" (under Save set) moves it to Done today; closing without finishing keeps it in Up next. Any number of sets per exercise. Tap one, check weight and reps (− / + buttons or type), optional note, then Save set. Set 1 is filled in from set 1 of the last session of that exercise; later sets are filled in from the set just done today. "Last time" shows the previous session's sets (for reference). "Today so far" lists today's sets; tap a set, then Remove set to delete it.
+- Each exercise in Training shows a gold 🏆 badge with your personal best set (heaviest weight, then most reps).
 - Reorder exercises: on the Training tab press and hold an exercise button until it lifts, then drag it.
+- Edit an exercise from Training: press and hold it and let go without moving: a panel opens with Rename, Move to another day, Copy to another day and Remove from this day (logged sets stay in History).
 - Add an exercise: "+ Add exercise" at the end of the exercise buttons (or in Settings → Workout days & exercises, open a day). It searches the built-in list of 130+ exercises grouped by muscle with equipment versions, shows the user's own exercises first with their last result, and lets them type any name as their own. It asks "Did you mean…?" if a typed name is almost the same as an existing one, so history stays together.
 - Rename or remove an exercise: Settings → Workout days & exercises (open the day) or the History tab. Renaming updates past sets everywhere; renaming onto an existing name offers to merge the two. Removing from a day can keep the history or delete it.
 - Plans: new users pick a starter plan (Push/Pull/Legs, Upper/Lower, Full body, Body-part split) or start from scratch. Change plan any time in Settings → Workout days & exercises → Change plan; logged sets are never deleted and history follows the exercise name. Exercises not in the current plan are under History → "Not in your current plan".
@@ -1757,6 +1766,101 @@ function setupBubble() {
   placeBub(false); bubColors();
 }
 
+/* ---------- press and hold an exercise or a day in Training: edit it in a panel ---------- */
+let edit = null; // { kind: "ex"|"day", name, view: "menu"|"rename"|"move"|"copy"|"remove"|"order"|"add" }
+function openEdit(kind, name) {
+  if (!name) return; mem.set("editTip", "1"); document.querySelectorAll(".edtip").forEach(x => x.remove());
+  const was = !!edit; edit = { kind, name, view: "menu" }; renderEdit();
+  if (!was) { $("editSheet").hidden = false; document.body.classList.add("menu-open"); pushLayer("edit"); }
+}
+function closeEdit() { if (!edit) return; popLayer("edit"); reallyCloseEdit(); }
+function reallyCloseEdit() { if (!edit) return; edit = null; $("editSheet").hidden = true; document.body.classList.remove("menu-open"); renderExGrid(); }
+function renderEdit() {
+  const { kind, name, view } = edit, body = $("editBody"); body.innerHTML = "";
+  $("editTitle").textContent = name;
+  const act = (icon, text, fn, danger) => { const b = el("button", "use edact" + (danger ? " dng" : "")); b.type = "button"; b.append(el("span", "edi", icon), el("span", null, text)); b.onclick = fn; body.appendChild(b); return b; };
+  const back = () => { const b = el("button", "use edcancel", "‹ Back"); b.type = "button"; b.onclick = () => { edit.view = "menu"; renderEdit(); }; body.appendChild(b); };
+  const field = (val, ph, label, okText, onOk) => {
+    const inp = el("input"); inp.type = "text"; inp.value = val; inp.placeholder = ph; inp.className = "edinp"; inp.setAttribute("aria-label", label);
+    const ok = el("button", "use primary edok", okText); ok.type = "button"; ok.onclick = () => onOk(inp.value);
+    inp.onkeydown = e => { if (e.key === "Enter") ok.click(); };
+    body.append(inp, ok); setTimeout(() => { inp.focus(); inp.select(); }, 30);
+  };
+  if (kind === "ex") {
+    const d = day; $("editSub").textContent = d + " day";
+    const others = days.filter(x => x !== d);
+    if (view === "menu") {
+      act("✎", "Rename", () => { edit.view = "rename"; renderEdit(); });
+      if (others.length) { act("↔", "Move to another day", () => { edit.view = "move"; renderEdit(); }); act("⧉", "Copy to another day", () => { edit.view = "copy"; renderEdit(); }); }
+      act("🗑", "Remove from " + d, () => { edit.view = "remove"; renderEdit(); }, true);
+    } else if (view === "rename") {
+      field(name, "Exercise name", "New name for " + name, "Save name", v => { const n = v.trim().replace(/\s+/g, " "); closeEdit(); if (n && n !== name) renameExercise(d, name, n); });
+      back();
+    } else if (view === "move" || view === "copy") {
+      body.appendChild(el("p", "small edq", (view === "move" ? "Move " : "Copy ") + name + " to:"));
+      others.forEach(o => {
+        const has = exercisesFor(o).includes(name);
+        const b = act("→", o + (has ? " (already there)" : ""), () => {
+          closeEdit();
+          const add = { ...lists, [o]: [...(lists[o] || []), name] };
+          lists = view === "move" ? { ...add, [d]: (lists[d] || []).filter(x => x !== name) } : add;
+          if (view === "move" && mem.get("ex_" + d) === name) mem.set("ex_" + d, "");
+          saveLists(); renderSelect(); renderPane(); toast((view === "move" ? "Moved " : "Copied ") + name + " to " + o + "." + offlineNote());
+        });
+        b.disabled = has;
+      });
+      back();
+    } else if (view === "remove") {
+      const n = allSets().filter(x => x.ex === name).length;
+      body.appendChild(el("p", "edq", "Remove " + name + " from " + d + "?" + (n ? " Your " + n + " logged set" + (n === 1 ? "" : "s") + " stay in History." : "")));
+      act("🗑", "Remove from " + d, () => { closeEdit(); removeExercise(d, name, false); }, true);
+      back();
+    }
+  } else {
+    const d = name, n = exercisesFor(d).length, last = lastDayDate(d);
+    $("editSub").textContent = n + " exercise" + (n === 1 ? "" : "s") + (last ? " · last done " + relDate(last) : "");
+    if (view === "menu") {
+      act("✎", "Rename day", () => { edit.view = "rename"; renderEdit(); });
+      if (days.length > 1) act("⇄", "Change the order of days", () => { edit.view = "order"; renderEdit(); });
+      act("+", "Add a new day", () => { edit.view = "add"; renderEdit(); });
+      if (days.length > 1) act("🗑", "Remove " + d, () => { edit.view = "remove"; renderEdit(); }, true);
+    } else if (view === "rename") {
+      field(d, "Day name", "New name for " + d, "Save name", v => { closeEdit(); renameDay(d, v); });
+      back();
+    } else if (view === "add") {
+      field("", "e.g. Arms, Full body", "New day name", "Add day", v => {
+        const nn = v.trim(); if (!nn) return;
+        if (days.some(x => x.toLowerCase() === nn.toLowerCase())) { toast("You already have a day called " + nn + ".", true); return; }
+        closeEdit(); days = [...days, nn]; lists = { ...lists, [nn]: [] }; day = nn; mem.set("day", nn);
+        saveLists(); renderAll(); toast("Added " + nn + ". Tap + Add exercise to fill it." + offlineNote());
+      });
+      back();
+    } else if (view === "order") {
+      body.appendChild(el("p", "small edq", "Use the arrows to change the order."));
+      days.forEach((x, i) => {
+        const r = el("div", "edord"), up = el("button", "use", "▲"), dn = el("button", "use", "▼");
+        up.type = dn.type = "button"; up.disabled = i === 0; dn.disabled = i === days.length - 1;
+        up.setAttribute("aria-label", "Move " + x + " up"); dn.setAttribute("aria-label", "Move " + x + " down");
+        const mv = dir => { const a = [...days]; [a[i], a[i + dir]] = [a[i + dir], a[i]]; days = a; saveLists(); renderDayBtns(); renderEdit(); };
+        up.onclick = () => mv(-1); dn.onclick = () => mv(1);
+        r.append(el("span", x === d ? "cur" : null, x), up, dn); body.appendChild(r);
+      });
+      const done = el("button", "use primary edok", "Done"); done.type = "button"; done.onclick = closeEdit; body.appendChild(done);
+    } else if (view === "remove") {
+      const k = allSets().filter(x => x.day === d).length;
+      body.appendChild(el("p", "edq", "Remove " + d + " from your plan?" + (k ? " Your " + k + " logged set" + (k === 1 ? "" : "s") + " stay in History." : "")));
+      act("🗑", "Remove " + d, () => { closeEdit(); dropDay(d); }, true);
+      back();
+    }
+  }
+}
+// remove a workout day from the plan; logged sets are kept (they show in History)
+function dropDay(d) {
+  if (days.length <= 1) { toast("Keep at least one workout day.", true); return; }
+  days = days.filter(x => x !== d); const nl = { ...lists }; delete nl[d]; lists = nl;
+  if (day === d) { day = days[0]; mem.set("day", day); }
+  saveLists(); renderAll(); toast("Removed " + d + ". Its history is kept." + offlineNote());
+}
 /* ---------- press and hold an exercise button, then drag to reorder ---------- */
 let drag = null, dragJustEnded = false;
 function setupDrag() {
@@ -1767,6 +1871,7 @@ function setupDrag() {
     if (!d.active) return;
     d.b.classList.remove("lifted"); d.b.style.transform = "";
     dragJustEnded = true; // swallows the click that follows the drop
+    if (!d.moved) { renderExGrid(); openEdit("ex", d.b.dataset.ex); return; }
     const before = exercisesFor(day), order = [...grid.querySelectorAll(".exb[data-ex]")].map(x => x.dataset.ex).filter(x => before.includes(x));
     before.forEach((x, i) => { if (!order.includes(x)) order.splice(Math.min(i, order.length), 0, x); });
     if (commit && order.join("\n") !== before.join("\n") && order.length === before.length) {
@@ -1796,6 +1901,7 @@ function setupDrag() {
     if (!drag || e.pointerId !== drag.id) return;
     if (!drag.active) { if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 10) { clearTimeout(drag.timer); drag = null; } return; }
     e.preventDefault();
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 8) drag.moved = true;
     const over = [...grid.querySelectorAll(".exb[data-ex]")].find(x => {
       if (x === drag.b || x.closest(".exitem.open") || x.classList.contains("done") !== drag.b.classList.contains("done")) return false; const q = x.getBoundingClientRect();
       return e.clientX >= q.left && e.clientX <= q.right && e.clientY >= q.top && e.clientY <= q.bottom;
@@ -1810,6 +1916,18 @@ function setupDrag() {
   grid.addEventListener("pointerup", () => end(true));
   grid.addEventListener("pointercancel", () => end(false));
   grid.addEventListener("contextmenu", e => { if (e.target.closest(".exb")) e.preventDefault(); });
+  // press and hold a day button to edit the day
+  const db = $("dayBtns"); let dh = null, dayHeld = false;
+  db.addEventListener("pointerdown", e => {
+    const b = e.target.closest("button"); if (!b || e.button > 0) return; dayHeld = false;
+    const name = days[[...db.children].indexOf(b)];
+    dh = { sx: e.clientX, sy: e.clientY, t: setTimeout(() => { dayHeld = true; dh = null; if (navigator.vibrate) try { navigator.vibrate(25); } catch (err) {} openEdit("day", name); }, 450) };
+  });
+  db.addEventListener("pointermove", e => { if (dh && Math.hypot(e.clientX - dh.sx, e.clientY - dh.sy) > 10) { clearTimeout(dh.t); dh = null; } });
+  const dEnd = () => { if (dh) { clearTimeout(dh.t); dh = null; } };
+  db.addEventListener("pointerup", dEnd); db.addEventListener("pointercancel", dEnd);
+  db.addEventListener("click", e => { if (dayHeld) { dayHeld = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  db.addEventListener("contextmenu", e => e.preventDefault());
   // stop the page scrolling while an exercise is being dragged (iPhone needs a non-passive listener)
   document.addEventListener("touchmove", e => { if (drag && drag.active) e.preventDefault(); }, { passive: false });
 }
@@ -1835,12 +1953,11 @@ function renameDay(oldName, newName) {
   saveLists(); changed.forEach(s => writeSession(s.date, s));
   renderAll(); toast("Renamed to " + newName + "." + offlineNote());
 }
-function removeDay(d) {
+async function removeDay(d) {
   if (days.length <= 1) { toast("Keep at least one workout day.", true); return; }
   const n = allSets().filter(s => s.day === d).length;
-  if (n) { toast(d + " has " + n + " logged set" + (n > 1 ? "s" : "") + ". Tap " + d + " to remove its exercises first.", true); return; }
-  days = days.filter(x => x !== d); const nl = { ...lists }; delete nl[d]; lists = nl;
-  saveLists(); renderAll(); toast("Removed " + d + "." + offlineNote());
+  if (n && !(await askConfirm("Remove " + d + "?", "It comes off your plan. Your " + n + " logged set" + (n > 1 ? "s" : "") + " stay in History.", "Remove", "Cancel"))) return;
+  dropDay(d);
 }
 
 /* ---------- colours: built-in and your own themes ---------- */
@@ -3043,7 +3160,7 @@ function wire() {
   $("dpick").onkeydown = e => { if (e.key === "Escape") { e.stopPropagation(); closeDatePick(); } };
   document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
   $("date").onchange = () => { if (!$("date").value) $("date").value = todayISO();
-    if ($("date").value > todayISO()) { $("date").value = todayISO(); toast("You can't log a future day. Showing today.", true); } renderDateLbl(); renderUnits(); renderPane(); };
+    if ($("date").value > todayISO()) { $("date").value = todayISO(); toast("You can't log a future day. Showing today.", true); } renderDateLbl(); renderUnits(); renderSelect(); renderPane(); };
   renderDateLbl();
 
   document.querySelectorAll("[data-step]").forEach(b => b.onclick = () => {
@@ -3175,6 +3292,7 @@ function wire() {
   };
   $("menuOpen").onclick = openMenu; $("menuClose").onclick = closeMenu; $("drawerBackdrop").onclick = closeMenu;
   setupDrag();
+  $("editDim").onclick = closeEdit; $("editClose").onclick = closeEdit;
   // AI coach chat
   setupBubble(); $("chatBack").onclick = closeChat;
   $("chatNew").onclick = () => { if (chatBusy) return; chatMsgs = []; renderChat(); $("chatIn").focus(); };
