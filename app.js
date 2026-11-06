@@ -171,7 +171,7 @@ function renderExGrid() {
     wrap.appendChild(b); if (open) wrap.appendChild(lc);
     return wrap;
   };
-  if (!mem.get("editTip") && names.length) grid.appendChild(el("p", "small edtip", "Tip: press and hold an exercise or a day to edit it."));
+  if (names.length) grid.appendChild(el("p", "small edtip", "Tip: press and hold an exercise or a day to edit it."));
   if (next.length) grid.appendChild(el("div", "exsec", "Up next"));
   next.forEach(ex => grid.appendChild(item(ex)));
   const add = el("button", "exb add", "+ Add exercise"); add.type = "button"; add.onclick = () => openAdd(day); grid.appendChild(add);
@@ -1769,7 +1769,7 @@ function setupBubble() {
 /* ---------- press and hold an exercise or a day in Training: edit it in a panel ---------- */
 let edit = null; // { kind: "ex"|"day", name, view: "menu"|"rename"|"move"|"copy"|"remove"|"order"|"add" }
 function openEdit(kind, name) {
-  if (!name) return; mem.set("editTip", "1"); document.querySelectorAll(".edtip").forEach(x => x.remove());
+  if (!name) return;
   const was = !!edit; edit = { kind, name, view: "menu" }; renderEdit();
   if (!was) { $("editSheet").hidden = false; document.body.classList.add("menu-open"); pushLayer("edit"); }
 }
