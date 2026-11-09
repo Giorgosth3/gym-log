@@ -403,7 +403,15 @@ function perSession(sets) {
   const by = {}; working(sets).forEach(s => (by[s.date] = by[s.date] || []).push(s));
   return Object.keys(by).sort().map(d => { const l = by[d]; return { date: d, top: topOf(l), est: Math.max(...l.map(e1rm)), vol: l.reduce((a, s) => a + s.w * s.r, 0), n: l.length }; });
 }
-const metricVal = (p, m) => m === "est" ? p.est : m === "vol" ? p.vol : p.top.w;
+// heaviest set, nudged up a little per rep: each rep adds 1/21 of the next weight step (2.5kg / 5lb),
+// so more reps at the same weight climb towards, but never reach, the next weight up
+// free weights (dumbbells, curls…) go up in 2.5kg steps, machines and everything else in 5kg steps
+const isFreeW = ex => /dumbbell|\bdb\b|hammer|standing.*curl|curl.*standing|free ?weight|kettlebell|lateral raise|\bfly\b|flye/i.test(ex || "") && !/machine|cable|smith/i.test(ex || "");
+// weight jump for the chart: 2.5kg for free weights (10, 12.5, 15…), 5kg for machines (5 / 10 lb)
+const chartStep = ex => (U() === "kg" ? (isFreeW(ex) ? 2.5 : 5) : (isFreeW(ex) ? 5 : 10) / 2.2046);
+// each rep up to 12 moves the point 1/13 of the way to the next weight step
+const repScore = s => s.w + chartStep(s.ex) * Math.min(s.r, 12) / 13;
+const metricVal = (p, m) => m === "est" ? p.est : m === "vol" ? p.vol : repScore(p.top);
 const pctChange = (a, b) => a > 0 ? Math.round((b - a) / a * 100) : null;
 function sparkSVG(vals, up) {
   const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", "0 0 56 22"); svg.setAttribute("class", "spark"); svg.setAttribute("aria-hidden", "true");
@@ -423,7 +431,13 @@ function detailChart(pts, metric) {
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (hi - lo < 1) { lo -= metric === "vol" ? 50 : 2.5; hi += metric === "vol" ? 50 : 2.5; }
   const padv = (hi - lo) * 0.12; lo = Math.max(0, lo - padv); hi += padv;
-  const ticks = niceTicks(lo, hi).filter(t => t >= lo && t <= hi);
+  let ticks = niceTicks(lo, hi).filter(t => t >= lo && t <= hi);
+  if (metric === "top") { // lines on real weight steps (40, 42.5, 45…); points sit between them as reps grow
+    const st = +disp(chartStep(pts[0].top.ex)).toFixed(2) || 2.5, vmin = Math.min(...vals), vmax = Math.max(...vals);
+    lo = Math.floor(vmin / st + 1e-9) * st; hi = (Math.floor(vmax / st + 1e-9) + 1) * st;
+    let k = st; while ((hi - lo) / k > 5) k += st;
+    ticks = []; for (let t = lo; t <= hi + 1e-9; t += k) ticks.push(+t.toFixed(2));
+  }
   const day = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).getTime(); };
   const t0 = day(pts[0].date), t1 = day(pts[pts.length - 1].date);
   const x = p => t1 === t0 ? (L + W - R) / 2 : L + (day(p.date) - t0) / (t1 - t0) * (W - L - R);
@@ -491,7 +505,7 @@ function renderHistory() {
     if (ptsAll.length) { const ln = el("span", "small"); ln.append(document.createTextNode("Last: "), el("b", null, relDate(ptsAll[ptsAll.length - 1].date)), document.createTextNode(" · 🏆 " + fmtW(best.w) + " × " + best.r)); nm.appendChild(ln); }
     else nm.appendChild(el("span", "small", mine.length ? "Warm-ups only so far" : "No sets logged yet"));
     row.appendChild(nm);
-    const tv = pts.map(p => p.top.w), pc = pts.length > 1 ? pctChange(tv[0], tv[tv.length - 1]) : null;
+    const tv = pts.map(p => repScore(p.top)), pc = pts.length > 1 ? pctChange(tv[0], tv[tv.length - 1]) : null;
     row.appendChild(sparkSVG(tv.slice(-12), pc == null || pc > 0));
     row.appendChild(el("span", "hpct " + (pc == null ? "" : pc > 0 ? "up" : "flat"), pc == null ? "–" : (pc > 0 ? "+" : "") + pc + "%"));
     row.appendChild(el("span", "hchev", open ? "⌃" : "⌄"));
@@ -518,7 +532,9 @@ function renderHistory() {
           const b = topOf(pts.map(p => p.top)), mv = pts.map(p => metricVal(p, met)), ch = mv[mv.length - 1] - mv[0];
           const st = el("div", "stats");
           st.append(stat(fmtW(b.w) + " × " + b.r, "Best 🏆"), stat(fmtW(Math.max(...pts.map(p => p.est))), "Est. 1-rep max"),
-            stat(pts.length > 1 ? (ch > 0 ? "+" : "") + (met === "vol" ? fmtBig(disp(ch)) + U() : trim(disp(ch)) + U()) : "–", pts.length > 1 ? "since " + shortDate(pts[0].date) : "1 session", pts.length > 1 && ch > 0 ? "good" : ""));
+            stat(pts.length > 1 ? (met === "top" ? (() => { const a = pts[0].top, z = pts[pts.length - 1].top, dw = z.w - a.w, dr = z.r - a.r;
+              return dw ? (dw > 0 ? "+" : "") + trim(disp(dw)) + U() : (dr > 0 ? "+" : "") + dr + " rep" + (Math.abs(dr) === 1 ? "" : "s"); })()
+              : (ch > 0 ? "+" : "") + (met === "vol" ? fmtBig(disp(ch)) + U() : trim(disp(ch)) + U())) : "–", pts.length > 1 ? "since " + shortDate(pts[0].date) : "1 session", pts.length > 1 && ch > 0 ? "good" : ""));
           card.appendChild(st);
         }
       }
@@ -1483,7 +1499,7 @@ const APP_GUIDE = `How the Gym Log app works (use this to answer app questions; 
 - Personal best = heavier weight than ever, or more reps at your heaviest weight. Celebrations show for personal bests, finishing every exercise of the day, hitting the weekly target and reaching your goal weight.
 - Group tab: private friends groups (up to 12 people; each person can be in up to 3 groups). Create a group (you become its leader 👑) or Join with a code a friend shares. Exercises get a leaderboard only when every member votes yes (Exercise votes → Propose exercises: search or pick a workout day, tick as many as you like; when voting you pick which of your own exercises it is). Votes close after 7 days; one "I don't do it" drops it. Rankings use raw weight: your heaviest set ever, then most reps; it updates automatically from sets logged on Training. A ⚠️ new jump tag shows when a best is 30%+ above the previous one. Group overview shows Most first places. Group settings (⚙︎): members, your name in the group, invite code, Leave group; the leader can also remove members, make someone else leader, make a new code, lock the group, rename it and remove a ranked exercise. Groups only see your chosen name and best sets on voted-in exercises.
 - Me tab: your level, a muscle map (front/back, male or female figure, chosen in Settings) where each of 9 muscles (Chest, Back, Shoulders, Biceps, Triceps, Core, Quads, Hamstrings & glutes, Calves) has a rank: Bronze, Silver, Gold, Platinum, Diamond (each with steps I, II, III), then Legend. Points: +10 per day you do at least 2 sets for that muscle (max 3 days a week); a personal best (estimated 1-rep max, after the first 2 sessions of an exercise as baseline) gives 3 points per 1% stronger (3 to 15, max one per exercise per week). 14 days without training a muscle drops it one step, then one more step per extra week (never below Bronze I); double points while climbing back. Legend also needs 40 of the last 52 weeks trained. The ? button explains it; tap a muscle for details; 'Which muscle each exercise counts for' sets the muscle of your own exercises. Weigh-ins and goal weight are lower on the Me tab. Group members can see each other's muscle maps.
-- History tab: one row per exercise with a trend line and % change. Tap one to open a detailed chart (kg up the side, dates along the bottom; tap a point to see that session), switch between Heaviest set, Est. 1-rep max and Total volume, and pick 1M, 3M, 6M, 1Y or All, which also filters the numbers and the sessions list. Rename or Remove is at the bottom of the open exercise. Each row says when you last did it (Today, Yesterday, the weekday this week, or the date).
+- History tab: one row per exercise with a trend line and % change. Tap one to open a detailed chart (kg up the side, dates along the bottom; tap a point to see that session), switch between Heaviest set (the lines are real weights: 5kg steps for machines, 2.5kg for free weights like dumbbells; each extra rep at the same weight moves the point a little closer to the next weight, so more reps also show as progress), Est. 1-rep max and Total volume, and pick 1M, 3M, 6M, 1Y or All, which also filters the numbers and the sessions list. Rename or Remove is at the bottom of the open exercise. Each row says when you last did it (Today, Yesterday, the weekday this week, or the date).
 - Progress tab: an overview with Week/Month/Year/All: workouts, sets, weight lifted and personal bests; a ring for this week against the weekly target and the streak; Most improved (last 3 months); Least improved (the 3 exercises with the smallest change or that went down over the last 3 months); and a month calendar of training days. Tap a day in the "This week" row to see which workout you did that day (Push, Pull…) or Rest.
 - Body weight: on the Me tab, below the muscle map: log your weight, see the 7-day average, weekly rate and goal weight.
 - Coach answers have a 🚩 Report button if an answer is wrong or inappropriate.
@@ -1872,8 +1888,18 @@ function setupDrag() {
     d.b.classList.remove("lifted"); d.b.style.transform = "";
     dragJustEnded = true; // swallows the click that follows the drop
     if (!d.moved) { renderExGrid(); openEdit("ex", d.b.dataset.ex); return; }
-    const before = exercisesFor(day), order = [...grid.querySelectorAll(".exb[data-ex]")].map(x => x.dataset.ex).filter(x => before.includes(x));
-    before.forEach((x, i) => { if (!order.includes(x)) order.splice(Math.min(i, order.length), 0, x); });
+    // keep finished exercises in their own plan slots: only reorder within "Up next" (and within "Done today")
+    const before = exercisesFor(day), shown = [...grid.querySelectorAll(".exb[data-ex]")].map(x => x.dataset.ex).filter(x => before.includes(x));
+    const doneNow = x => isFinished(x) && todaySets(x).length > 0;
+    const qNext = shown.filter(x => !doneNow(x)), qDone = shown.filter(doneNow);
+    // each finished exercise goes back right after the exercise it followed before
+    const order = [...qNext, ...before.filter(x => !shown.includes(x) && !doneNow(x))];
+    qDone.forEach(x => {
+      const i = before.indexOf(x); let prev = null;
+      for (let j = i - 1; j >= 0; j--) if (order.includes(before[j])) { prev = before[j]; break; }
+      order.splice(prev === null ? 0 : order.indexOf(prev) + 1, 0, x);
+    });
+    before.forEach(x => { if (!order.includes(x)) order.push(x); });
     if (commit && order.join("\n") !== before.join("\n") && order.length === before.length) {
       lists = { ...lists, [day]: order }; saveLists(); toast("Order saved." + offlineNote());
       if (tab === "history") renderHistory();
